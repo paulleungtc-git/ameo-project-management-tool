@@ -27,6 +27,14 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="S3_FORCE_PATH_STYLE",
     )
+    auth_jwt_secret: str = Field(
+        default="dev-secret-change-before-shared-use",
+        validation_alias="AUTH_JWT_SECRET",
+    )
+    auth_access_token_minutes: int = Field(
+        default=60 * 24,
+        validation_alias="AUTH_ACCESS_TOKEN_MINUTES",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:
