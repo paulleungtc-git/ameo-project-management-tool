@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.activity import record_task_activity
 from app.auth import get_current_user
 from app.db.session import get_db
 from app.models import Task, TaskPriority, TaskStatus, User
@@ -58,6 +59,14 @@ def create_task(
         due_date=payload.due_date,
     )
     db.add(task)
+    db.flush()
+    record_task_activity(
+        db,
+        task_id=task.id,
+        actor=current_user,
+        event_type="task.created",
+        payload={"title": task.title, "status": task.status},
+    )
     db.commit()
     db.refresh(task)
     return task
@@ -72,12 +81,26 @@ def update_task(
 ) -> Task:
     task = require_task_access(db, current_user, task_id)
     data = payload.model_dump(exclude_unset=True)
+    before = {key: getattr(task, key) for key in data}
     if "status" in data and data["status"] is not None:
         data["status"] = validate_status(data["status"])
     if "priority" in data and data["priority"] is not None:
         data["priority"] = validate_priority(data["priority"])
     for key, value in data.items():
         setattr(task, key, value)
+    changes = {
+        key: {"from": before[key], "to": value}
+        for key, value in data.items()
+        if before[key] != value
+    }
+    if changes:
+        record_task_activity(
+            db,
+            task_id=task.id,
+            actor=current_user,
+            event_type="task.updated",
+            payload={"changes": changes},
+        )
     db.commit()
     db.refresh(task)
     return task
