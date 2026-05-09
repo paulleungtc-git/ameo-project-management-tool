@@ -42,7 +42,7 @@ docker compose up --build
 
 Default local URLs:
 
-- Web: `http://localhost:3000`
+- Web: `http://localhost:3001`
 - Backend API: `http://localhost:8000`
 - Garage S3 API: `http://localhost:3900`
 - Garage static web endpoint: `http://localhost:3902`
