@@ -13,6 +13,21 @@
   --shadow: 0 18px 50px rgba(24, 39, 56, 0.08);
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #101417;
+  --surface: #181f24;
+  --surface-muted: #263039;
+  --text: #e7edf2;
+  --muted: #9dafbf;
+  --line: #2d3842;
+  --accent: #2f9a82;
+  --accent-strong: #52b99f;
+  --accent-soft: #1f3b35;
+  --warning: #d8a34b;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -25,6 +40,22 @@ body {
     Arial,
     Helvetica,
     sans-serif;
+}
+
+input {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  padding: 0.72rem 0.85rem;
+  width: 100%;
+}
+
+input:disabled,
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 a {
@@ -45,6 +76,19 @@ button {
 
 button:hover {
   background: var(--accent-strong);
+}
+
+.secondary-button {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.secondary-button:hover {
+  background: var(--line);
+}
+
+.compact-button {
+  padding: 0.45rem 0.65rem;
 }
 
 .app-shell {
@@ -134,6 +178,30 @@ button:hover {
   display: grid;
   gap: 1.25rem;
   padding: 2rem;
+}
+
+.setup-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1.2fr 0.9fr 0.9fr;
+}
+
+.form-panel {
+  align-content: start;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.form-message,
+.empty-state {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: 0;
 }
 
 .topbar,
@@ -335,11 +403,13 @@ h3 {
   }
 
   .metrics,
-  .main-grid {
+  .main-grid,
+  .setup-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .main-grid {
+  .main-grid,
+  .setup-grid {
     grid-template-columns: 1fr;
   }
 }
