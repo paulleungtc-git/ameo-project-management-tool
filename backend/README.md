@@ -32,7 +32,7 @@ The app reads environment variables directly, with `.env` support:
 APP_NAME=Ameo Backend
 ENVIRONMENT=local
 DATABASE_URL=postgresql+psycopg://ameo:ameo@localhost:5432/ameo
-CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
+CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002
 S3_ENDPOINT=http://localhost:3900
 S3_BUCKET=attachments
 S3_ACCESS_KEY=replace-with-garage-access-key-id

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "Backlog" | "Todo" | "In Progress" | "Review" | "Done";
 type TaskPriority = "Low" | "Medium" | "High";
@@ -35,7 +35,34 @@ type Task = {
   due_date: string | null;
 };
 
+type Comment = {
+  id: number;
+  task_id: number;
+  author_id: number;
+  body: string;
+  created_at: string;
+};
+
+type ActivityEvent = {
+  id: number;
+  task_id: number;
+  event_type: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+type Attachment = {
+  id: number;
+  filename: string;
+  content_type: string;
+  byte_size: number;
+  checksum: string;
+  created_at: string;
+};
+
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const tokenKey = "ameo_token";
+const themeKey = "ameo_theme";
 const statusOrder: TaskStatus[] = ["Backlog", "Todo", "In Progress", "Review", "Done"];
 
 async function apiRequest<T>(
@@ -44,7 +71,9 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
+  if (!(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -57,21 +86,39 @@ async function apiRequest<T>(
 }
 
 export default function Home() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [token, setToken] = useState<string | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") {
+      return "light";
+    }
+    const storedTheme = window.localStorage.getItem(themeKey);
+    return storedTheme === "dark" || storedTheme === "light" ? storedTheme : "light";
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return window.localStorage.getItem(tokenKey);
+  });
   const [user, setUser] = useState<User | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [email, setEmail] = useState("owner@example.com");
   const [password, setPassword] = useState("password123");
   const [name, setName] = useState("Owner");
   const [workspaceName, setWorkspaceName] = useState("Ameo Studio");
   const [projectName, setProjectName] = useState("Launch");
   const [taskTitle, setTaskTitle] = useState("Create first real task");
+  const [commentBody, setCommentBody] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
 
   const workspace = workspaces[0] ?? null;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
 
   const counts = useMemo(
     () =>
@@ -82,12 +129,65 @@ export default function Home() {
     [tasks]
   );
 
+  useEffect(() => {
+    if (!token || user) {
+      return;
+    }
+
+    let cancelled = false;
+    apiRequest<User>("/auth/me", token)
+      .then((currentUser) => {
+        if (!cancelled) {
+          setUser(currentUser);
+          return loadWorkspaceData(token);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          window.localStorage.removeItem(tokenKey);
+          setToken(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user]);
+
+  useEffect(() => {
+    window.localStorage.setItem(themeKey, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!selectedTaskId || !token) {
+      return;
+    }
+
+    let cancelled = false;
+    Promise.all([
+      apiRequest<Comment[]>(`/tasks/${selectedTaskId}/comments`, token),
+      apiRequest<ActivityEvent[]>(`/tasks/${selectedTaskId}/activity`, token),
+      apiRequest<Attachment[]>(`/attachments/tasks/${selectedTaskId}`, token)
+    ]).then(([commentData, activityData, attachmentData]) => {
+      if (!cancelled) {
+        setComments(commentData);
+        setActivity(activityData);
+        setAttachments(attachmentData);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTaskId, token]);
+
   async function loadWorkspaceData(nextToken: string) {
     const workspaceData = await apiRequest<Workspace[]>("/workspaces", nextToken);
     setWorkspaces(workspaceData);
     if (workspaceData.length === 0) {
       setProjects([]);
       setTasks([]);
+      setSelectedTaskId(null);
       return;
     }
     const workspaceId = workspaceData[0].id;
@@ -97,6 +197,38 @@ export default function Home() {
     ]);
     setProjects(projectData);
     setTasks(taskData);
+    setSelectedTaskId((current) => current ?? taskData[0]?.id ?? null);
+  }
+
+  async function loadTaskDetails(taskId: number, nextToken = token) {
+    if (!nextToken) {
+      return;
+    }
+    const [commentData, activityData, attachmentData] = await Promise.all([
+      apiRequest<Comment[]>(`/tasks/${taskId}/comments`, nextToken),
+      apiRequest<ActivityEvent[]>(`/tasks/${taskId}/activity`, nextToken),
+      apiRequest<Attachment[]>(`/attachments/tasks/${taskId}`, nextToken)
+    ]);
+    setComments(commentData);
+    setActivity(activityData);
+    setAttachments(attachmentData);
+  }
+
+  function saveSession(nextToken: string, nextUser: User) {
+    window.localStorage.setItem(tokenKey, nextToken);
+    setToken(nextToken);
+    setUser(nextUser);
+  }
+
+  function clearSession() {
+    window.localStorage.removeItem(tokenKey);
+    setToken(null);
+    setUser(null);
+    setWorkspaces([]);
+    setProjects([]);
+    setTasks([]);
+    setSelectedTaskId(null);
+    setMessage("Signed out.");
   }
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
@@ -112,8 +244,7 @@ export default function Home() {
           workspace_name: workspaceName
         })
       });
-      setToken(response.access_token);
-      setUser(response.user);
+      saveSession(response.access_token, response.user);
       await loadWorkspaceData(response.access_token);
       setMessage("Workspace created.");
     } catch (error) {
@@ -129,8 +260,7 @@ export default function Home() {
         method: "POST",
         body: JSON.stringify({ email, password })
       });
-      setToken(response.access_token);
-      setUser(response.user);
+      saveSession(response.access_token, response.user);
       await loadWorkspaceData(response.access_token);
       setMessage("Signed in.");
     } catch (error) {
@@ -170,6 +300,7 @@ export default function Home() {
       })
     });
     setTasks((current) => [task, ...current]);
+    setSelectedTaskId(task.id);
     setTaskTitle("");
   }
 
@@ -184,6 +315,43 @@ export default function Home() {
       body: JSON.stringify({ status: nextStatus })
     });
     setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    if (selectedTaskId === updated.id) {
+      await loadTaskDetails(updated.id, token);
+    }
+  }
+
+  async function handleCreateComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !selectedTask || !commentBody.trim()) {
+      return;
+    }
+    const comment = await apiRequest<Comment>(`/tasks/${selectedTask.id}/comments`, token, {
+      method: "POST",
+      body: JSON.stringify({ body: commentBody })
+    });
+    setComments((current) => [...current, comment]);
+    setCommentBody("");
+    await loadTaskDetails(selectedTask.id, token);
+  }
+
+  async function handleUploadAttachment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !selectedTask || !file) {
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    const attachment = await apiRequest<Attachment>(`/attachments/tasks/${selectedTask.id}`, token, {
+      method: "POST",
+      body: formData
+    });
+    setAttachments((current) => [attachment, ...current]);
+    setFile(null);
+    event.currentTarget.reset();
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setFile(event.target.files?.[0] ?? null);
   }
 
   return (
@@ -217,13 +385,20 @@ export default function Home() {
             <p className="eyebrow">Live workspace</p>
             <h1>Project dashboard</h1>
           </div>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          >
-            {theme === "light" ? "Dark" : "Light"}
-          </button>
+          <div className="button-row">
+            {user ? (
+              <button className="secondary-button" type="button" onClick={clearSession}>
+                Sign out
+              </button>
+            ) : null}
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            >
+              {theme === "light" ? "Dark" : "Light"}
+            </button>
+          </div>
         </header>
 
         <section className="setup-grid">
@@ -369,14 +544,14 @@ export default function Home() {
               <span>Project</span>
               <span>Priority</span>
               <span>Status</span>
-              <span>Move</span>
+              <span>Actions</span>
             </div>
             {tasks.map((task) => (
               <article className="task-row" key={task.id}>
-                <span>
+                <button className="task-link" type="button" onClick={() => setSelectedTaskId(task.id)}>
                   <strong>{task.title}</strong>
                   <small>{task.description || "No description"}</small>
-                </span>
+                </button>
                 <span>{projects.find((project) => project.id === task.project_id)?.name ?? "Project"}</span>
                 <span>{task.priority}</span>
                 <span className="status-pill">{task.status}</span>
@@ -386,6 +561,79 @@ export default function Home() {
               </article>
             ))}
           </div>
+        </section>
+
+        <section className="detail-grid">
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Selected task</p>
+                <h2>{selectedTask?.title ?? "No task selected"}</h2>
+              </div>
+            </div>
+            <form className="form-panel" onSubmit={handleCreateComment}>
+              <input
+                value={commentBody}
+                onChange={(event) => setCommentBody(event.target.value)}
+                placeholder="Add a comment"
+                disabled={!selectedTask}
+              />
+              <button type="submit" disabled={!selectedTask || !commentBody.trim()}>
+                Comment
+              </button>
+            </form>
+            <div className="detail-list">
+              {comments.map((comment) => (
+                <article className="detail-item" key={comment.id}>
+                  <strong>{comment.body}</strong>
+                  <small>{new Date(comment.created_at).toLocaleString()}</small>
+                </article>
+              ))}
+              {selectedTask && comments.length === 0 ? <p className="empty-state">No comments yet.</p> : null}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Files</p>
+                <h2>Attachments</h2>
+              </div>
+            </div>
+            <form className="form-panel" onSubmit={handleUploadAttachment}>
+              <input type="file" onChange={handleFileChange} disabled={!selectedTask} />
+              <button type="submit" disabled={!selectedTask || !file}>
+                Upload file
+              </button>
+            </form>
+            <div className="detail-list">
+              {attachments.map((attachment) => (
+                <article className="detail-item" key={attachment.id}>
+                  <strong>{attachment.filename}</strong>
+                  <small>{attachment.content_type} - {attachment.byte_size} bytes</small>
+                </article>
+              ))}
+              {selectedTask && attachments.length === 0 ? <p className="empty-state">No attachments yet.</p> : null}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">History</p>
+                <h2>Activity</h2>
+              </div>
+            </div>
+            <div className="detail-list">
+              {activity.map((event) => (
+                <article className="detail-item" key={event.id}>
+                  <strong>{event.event_type}</strong>
+                  <small>{new Date(event.created_at).toLocaleString()}</small>
+                </article>
+              ))}
+              {selectedTask && activity.length === 0 ? <p className="empty-state">No activity yet.</p> : null}
+            </div>
+          </section>
         </section>
       </section>
     </main>
