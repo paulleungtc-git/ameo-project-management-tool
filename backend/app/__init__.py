@@ -1,0 +1,2 @@
+"""Ameo backend application package."""
+
