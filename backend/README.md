@@ -24,6 +24,12 @@ Health check:
 curl http://127.0.0.1:8000/health
 ```
 
+Export the OpenAPI contract:
+
+```sh
+python scripts/export_openapi.py
+```
+
 ## Environment
 
 The app reads environment variables directly, with `.env` support:
