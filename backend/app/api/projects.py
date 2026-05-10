@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -14,15 +14,18 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 @router.get("", response_model=list[ProjectRead])
 def list_projects(
     workspace_id: int,
+    q: str | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Project]:
     require_workspace_member(db, current_user, workspace_id)
+    query = select(Project).where(Project.workspace_id == workspace_id)
+    if q:
+        term = f"%{q.strip()}%"
+        query = query.where(or_(Project.name.ilike(term), Project.description.ilike(term)))
     return list(
         db.scalars(
-            select(Project)
-            .where(Project.workspace_id == workspace_id)
-            .order_by(Project.created_at.desc()),
+            query.order_by(Project.created_at.desc()),
         ),
     )
 

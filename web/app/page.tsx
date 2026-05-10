@@ -115,6 +115,13 @@ export default function Home() {
   const [taskTitle, setTaskTitle] = useState("Create first real task");
   const [commentBody, setCommentBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [searchText, setSearchText] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [dueFrom, setDueFrom] = useState("");
+  const [dueTo, setDueTo] = useState("");
   const [message, setMessage] = useState("");
 
   const workspace = workspaces[0] ?? null;
@@ -181,7 +188,33 @@ export default function Home() {
     };
   }, [selectedTaskId, token]);
 
-  async function loadWorkspaceData(nextToken: string) {
+  function buildTaskQuery(workspaceId: number) {
+    const params = new URLSearchParams({ workspace_id: String(workspaceId) });
+    if (searchText.trim()) {
+      params.set("q", searchText.trim());
+    }
+    if (projectFilter) {
+      params.set("project_id", projectFilter);
+    }
+    if (statusFilter) {
+      params.set("status", statusFilter);
+    }
+    if (priorityFilter) {
+      params.set("priority", priorityFilter);
+    }
+    if (assigneeFilter.trim()) {
+      params.set("assignee_id", assigneeFilter.trim());
+    }
+    if (dueFrom) {
+      params.set("due_from", dueFrom);
+    }
+    if (dueTo) {
+      params.set("due_to", dueTo);
+    }
+    return params;
+  }
+
+  async function loadWorkspaceData(nextToken: string, applyFilters = false) {
     const workspaceData = await apiRequest<Workspace[]>("/workspaces", nextToken);
     setWorkspaces(workspaceData);
     if (workspaceData.length === 0) {
@@ -191,13 +224,22 @@ export default function Home() {
       return;
     }
     const workspaceId = workspaceData[0].id;
+    const projectParams = new URLSearchParams({ workspace_id: String(workspaceId) });
+    if (applyFilters && searchText.trim()) {
+      projectParams.set("q", searchText.trim());
+    }
+    const taskParams = applyFilters
+      ? buildTaskQuery(workspaceId)
+      : new URLSearchParams({ workspace_id: String(workspaceId) });
     const [projectData, taskData] = await Promise.all([
-      apiRequest<Project[]>(`/projects?workspace_id=${workspaceId}`, nextToken),
-      apiRequest<Task[]>(`/tasks?workspace_id=${workspaceId}`, nextToken)
+      apiRequest<Project[]>(`/projects?${projectParams.toString()}`, nextToken),
+      apiRequest<Task[]>(`/tasks?${taskParams.toString()}`, nextToken)
     ]);
     setProjects(projectData);
     setTasks(taskData);
-    setSelectedTaskId((current) => current ?? taskData[0]?.id ?? null);
+    setSelectedTaskId((current) =>
+      current && taskData.some((task) => task.id === current) ? current : taskData[0]?.id ?? null
+    );
   }
 
   async function loadTaskDetails(taskId: number, nextToken = token) {
@@ -283,6 +325,38 @@ export default function Home() {
     });
     setProjects((current) => [project, ...current]);
     setProjectName("");
+  }
+
+  async function handleApplyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token) {
+      return;
+    }
+    await loadWorkspaceData(token, true);
+  }
+
+  async function handleClearFilters() {
+    if (!token) {
+      return;
+    }
+    setSearchText("");
+    setProjectFilter("");
+    setStatusFilter("");
+    setPriorityFilter("");
+    setAssigneeFilter("");
+    setDueFrom("");
+    setDueTo("");
+    const workspaceId = workspace?.id;
+    if (!workspaceId) {
+      return;
+    }
+    const [projectData, taskData] = await Promise.all([
+      apiRequest<Project[]>(`/projects?workspace_id=${workspaceId}`, token),
+      apiRequest<Task[]>(`/tasks?workspace_id=${workspaceId}`, token)
+    ]);
+    setProjects(projectData);
+    setTasks(taskData);
+    setSelectedTaskId(taskData[0]?.id ?? null);
   }
 
   async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
@@ -537,7 +611,59 @@ export default function Home() {
               <p className="eyebrow">Priority queue</p>
               <h2>Tasks</h2>
             </div>
+            <span>{tasks.length} shown</span>
           </div>
+          <form className="filter-bar" onSubmit={handleApplyFilters}>
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="Search tasks and projects"
+              disabled={!token}
+            />
+            <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} disabled={!token}>
+              <option value="">All projects</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} disabled={!token}>
+              <option value="">Any status</option>
+              {statusOrder.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+            <select
+              value={priorityFilter}
+              onChange={(event) => setPriorityFilter(event.target.value)}
+              disabled={!token}
+            >
+              <option value="">Any priority</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+            <input
+              value={assigneeFilter}
+              onChange={(event) => setAssigneeFilter(event.target.value)}
+              placeholder="Assignee ID"
+              inputMode="numeric"
+              disabled={!token}
+            />
+            <input value={dueFrom} onChange={(event) => setDueFrom(event.target.value)} type="date" disabled={!token} />
+            <input value={dueTo} onChange={(event) => setDueTo(event.target.value)} type="date" disabled={!token} />
+            <div className="button-row filter-actions">
+              <button type="submit" disabled={!token}>
+                Apply
+              </button>
+              <button className="secondary-button" type="button" onClick={handleClearFilters} disabled={!token}>
+                Clear
+              </button>
+            </div>
+          </form>
           <div className="task-table">
             <div className="task-row task-header">
               <span>Task</span>
@@ -560,6 +686,7 @@ export default function Home() {
                 </button>
               </article>
             ))}
+            {tasks.length === 0 ? <p className="empty-state">No matching tasks.</p> : null}
           </div>
         </section>
 

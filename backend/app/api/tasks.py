@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.activity import record_task_activity
@@ -30,6 +32,12 @@ def validate_priority(value: str) -> str:
 def list_tasks(
     workspace_id: int,
     project_id: int | None = None,
+    q: str | None = None,
+    status_value: str | None = Query(default=None, alias="status"),
+    priority: str | None = None,
+    assignee_id: int | None = None,
+    due_from: date | None = None,
+    due_to: date | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Task]:
@@ -37,6 +45,19 @@ def list_tasks(
     query = select(Task).where(Task.workspace_id == workspace_id)
     if project_id is not None:
         query = query.where(Task.project_id == project_id)
+    if q:
+        term = f"%{q.strip()}%"
+        query = query.where(or_(Task.title.ilike(term), Task.description.ilike(term)))
+    if status_value is not None:
+        query = query.where(Task.status == validate_status(status_value))
+    if priority is not None:
+        query = query.where(Task.priority == validate_priority(priority))
+    if assignee_id is not None:
+        query = query.where(Task.assignee_id == assignee_id)
+    if due_from is not None:
+        query = query.where(Task.due_date >= due_from)
+    if due_to is not None:
+        query = query.where(Task.due_date <= due_to)
     return list(db.scalars(query.order_by(Task.created_at.desc())))
 
 
