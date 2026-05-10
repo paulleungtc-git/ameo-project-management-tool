@@ -6,6 +6,7 @@ from app.activity import record_task_activity
 from app.auth import get_current_user
 from app.db.session import get_db
 from app.models import TaskActivityEvent, TaskComment, User
+from app.notifications import notify_task_users
 from app.permissions import require_task_access
 from app.schemas import ActivityRead, CommentCreate, CommentRead
 
@@ -18,7 +19,7 @@ def list_comments(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[TaskComment]:
-    require_task_access(db, current_user, task_id)
+    task = require_task_access(db, current_user, task_id)
     return list(
         db.scalars(
             select(TaskComment)
@@ -35,7 +36,7 @@ def create_comment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TaskComment:
-    require_task_access(db, current_user, task_id)
+    task = require_task_access(db, current_user, task_id)
     comment = TaskComment(task_id=task_id, author_id=current_user.id, body=payload.body)
     db.add(comment)
     db.flush()
@@ -45,6 +46,15 @@ def create_comment(
         actor=current_user,
         event_type="comment.created",
         payload={"comment_id": comment.id},
+    )
+    notify_task_users(
+        db,
+        task=task,
+        actor=current_user,
+        event_type="comment.created",
+        title=f"New comment on {task.title}",
+        body=payload.body,
+        user_ids=[task.created_by_id, task.assignee_id],
     )
     db.commit()
     db.refresh(comment)

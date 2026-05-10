@@ -133,6 +133,20 @@ class ActivityRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class NotificationRead(BaseModel):
+    id: int
+    workspace_id: int
+    user_id: int
+    task_id: int | None
+    event_type: str
+    title: str
+    body: str
+    read_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class AttachmentRead(BaseModel):
     id: int
     workspace_id: int

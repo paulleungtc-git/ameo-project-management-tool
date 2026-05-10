@@ -70,6 +70,18 @@ type Attachment = {
   created_at: string;
 };
 
+type Notification = {
+  id: number;
+  workspace_id: number;
+  user_id: number;
+  task_id: number | null;
+  event_type: string;
+  title: string;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+};
+
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const tokenKey = "ameo_token";
 const themeKey = "ameo_theme";
@@ -148,6 +160,7 @@ export default function Home() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [email, setEmail] = useState("owner@example.com");
   const [password, setPassword] = useState("password123");
   const [name, setName] = useState("Owner");
@@ -267,6 +280,7 @@ export default function Home() {
       setProjects([]);
       setTasks([]);
       setMembers([]);
+      setNotifications([]);
       setSelectedTaskId(null);
       return;
     }
@@ -278,14 +292,16 @@ export default function Home() {
     const taskParams = applyFilters
       ? buildTaskQuery(workspaceId)
       : new URLSearchParams({ workspace_id: String(workspaceId) });
-    const [projectData, taskData, memberData] = await Promise.all([
+    const [projectData, taskData, memberData, notificationData] = await Promise.all([
       apiRequest<Project[]>(`/projects?${projectParams.toString()}`, nextToken),
       apiRequest<Task[]>(`/tasks?${taskParams.toString()}`, nextToken),
-      apiRequest<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, nextToken)
+      apiRequest<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, nextToken),
+      apiRequest<Notification[]>(`/notifications?workspace_id=${workspaceId}&unread_only=true`, nextToken)
     ]);
     setProjects(projectData);
     setTasks(taskData);
     setMembers(memberData);
+    setNotifications(notificationData);
     setSelectedTaskId((current) =>
       current && taskData.some((task) => task.id === current) ? current : taskData[0]?.id ?? null
     );
@@ -319,6 +335,7 @@ export default function Home() {
     setProjects([]);
     setTasks([]);
     setMembers([]);
+    setNotifications([]);
     setSelectedTaskId(null);
     setMessage("Signed out.");
   }
@@ -383,6 +400,17 @@ export default function Home() {
     }
     const memberData = await apiRequest<WorkspaceMember[]>(`/workspaces/${workspace.id}/members`, nextToken);
     setMembers(memberData);
+  }
+
+  async function reloadNotifications(nextToken = token) {
+    if (!nextToken || !workspace) {
+      return;
+    }
+    const notificationData = await apiRequest<Notification[]>(
+      `/notifications?workspace_id=${workspace.id}&unread_only=true`,
+      nextToken
+    );
+    setNotifications(notificationData);
   }
 
   async function handleAddMember(event: FormEvent<HTMLFormElement>) {
@@ -500,6 +528,7 @@ export default function Home() {
     if (selectedTaskId === updated.id) {
       await loadTaskDetails(updated.id, token);
     }
+    await reloadNotifications(token);
   }
 
   async function handleCreateComment(event: FormEvent<HTMLFormElement>) {
@@ -514,6 +543,17 @@ export default function Home() {
     setComments((current) => [...current, comment]);
     setCommentBody("");
     await loadTaskDetails(selectedTask.id, token);
+    await reloadNotifications(token);
+  }
+
+  async function handleMarkNotificationRead(notification: Notification) {
+    if (!token) {
+      return;
+    }
+    await apiRequest<Notification>(`/notifications/${notification.id}/read`, token, {
+      method: "PATCH"
+    });
+    setNotifications((current) => current.filter((item) => item.id !== notification.id));
   }
 
   async function handleUploadAttachment(event: FormEvent<HTMLFormElement>) {
@@ -699,8 +739,8 @@ export default function Home() {
             <strong>{counts.find((item) => item.status === "Review")?.count}</strong>
           </article>
           <article>
-            <span>Total tasks</span>
-            <strong>{tasks.length}</strong>
+            <span>Unread notifications</span>
+            <strong>{notifications.length}</strong>
           </article>
         </section>
 
@@ -884,6 +924,34 @@ export default function Home() {
               </article>
             ))}
             {tasks.length === 0 ? <p className="empty-state">No matching tasks.</p> : null}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Notifications</p>
+              <h2>Inbox</h2>
+            </div>
+            <span>{notifications.length} unread</span>
+          </div>
+          <div className="detail-list">
+            {notifications.map((notification) => (
+              <article className="detail-item notification-item" key={notification.id}>
+                <div>
+                  <strong>{notification.title}</strong>
+                  <small>{notification.body}</small>
+                </div>
+                <button
+                  className="secondary-button compact-button"
+                  type="button"
+                  onClick={() => handleMarkNotificationRead(notification)}
+                >
+                  Mark read
+                </button>
+              </article>
+            ))}
+            {notifications.length === 0 ? <p className="empty-state">No unread notifications.</p> : null}
           </div>
         </section>
 

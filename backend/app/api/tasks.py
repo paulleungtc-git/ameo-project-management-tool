@@ -8,6 +8,7 @@ from app.activity import record_task_activity
 from app.auth import get_current_user
 from app.db.session import get_db
 from app.models import Task, TaskPriority, TaskStatus, User
+from app.notifications import notify_task_users
 from app.permissions import require_project_access, require_task_access, require_workspace_member
 from app.schemas import TaskCreate, TaskRead, TaskUpdate
 
@@ -88,6 +89,15 @@ def create_task(
         event_type="task.created",
         payload={"title": task.title, "status": task.status},
     )
+    notify_task_users(
+        db,
+        task=task,
+        actor=current_user,
+        event_type="task.assigned",
+        title=f"Assigned: {task.title}",
+        body=f"{current_user.name} assigned you a task.",
+        user_ids=[task.assignee_id],
+    )
     db.commit()
     db.refresh(task)
     return task
@@ -122,6 +132,26 @@ def update_task(
             event_type="task.updated",
             payload={"changes": changes},
         )
+        if "assignee_id" in changes:
+            notify_task_users(
+                db,
+                task=task,
+                actor=current_user,
+                event_type="task.assigned",
+                title=f"Assigned: {task.title}",
+                body=f"{current_user.name} assigned you a task.",
+                user_ids=[task.assignee_id],
+            )
+        elif "status" in changes:
+            notify_task_users(
+                db,
+                task=task,
+                actor=current_user,
+                event_type="task.updated",
+                title=f"Task updated: {task.title}",
+                body=f"{current_user.name} moved the task to {task.status}.",
+                user_ids=[task.created_by_id, task.assignee_id],
+            )
     db.commit()
     db.refresh(task)
     return task

@@ -234,6 +234,11 @@ button:hover {
   color: var(--muted);
 }
 
+.notification-item {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .topbar,
 .panel-heading {
   align-items: center;
