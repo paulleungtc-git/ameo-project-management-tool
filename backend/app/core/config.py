@@ -27,6 +27,14 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="S3_FORCE_PATH_STYLE",
     )
+    attachment_max_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        validation_alias="ATTACHMENT_MAX_BYTES",
+    )
+    attachment_allowed_content_types: str = Field(
+        default="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/zip",
+        validation_alias="ATTACHMENT_ALLOWED_CONTENT_TYPES",
+    )
     auth_jwt_secret: str = Field(
         default="dev-secret-change-before-shared-use",
         validation_alias="AUTH_JWT_SECRET",
@@ -42,6 +50,14 @@ class Settings(BaseSettings):
             origin.strip()
             for origin in self.cors_origins.split(",")
             if origin.strip()
+        ]
+
+    @property
+    def attachment_allowed_content_type_list(self) -> list[str]:
+        return [
+            content_type.strip()
+            for content_type in self.attachment_allowed_content_types.split(",")
+            if content_type.strip()
         ]
 
     model_config = SettingsConfigDict(

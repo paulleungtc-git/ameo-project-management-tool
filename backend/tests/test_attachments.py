@@ -2,6 +2,7 @@ from typing import BinaryIO
 
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings, get_settings
 from app.storage import ObjectStorage, get_object_storage
 
 
@@ -63,3 +64,78 @@ def test_task_attachment_upload(client: TestClient) -> None:
     list_response = client.get(f"/attachments/tasks/{task_id}", headers=headers)
     assert list_response.status_code == 200
     assert list_response.json()[0]["filename"] == "note.txt"
+
+
+def test_task_attachment_rejects_empty_file(client: TestClient) -> None:
+    storage = FakeStorage()
+
+    headers = auth_headers(client)
+    task_id = create_task(client, headers)
+    app = client.app
+    app.dependency_overrides[get_object_storage] = lambda: storage
+    response = client.post(
+        f"/attachments/tasks/{task_id}",
+        headers=headers,
+        files={"file": ("empty.txt", b"", "text/plain")},
+    )
+    app.dependency_overrides.pop(get_object_storage, None)
+
+    assert response.status_code == 422
+    assert storage.files == {}
+
+
+def test_task_attachment_rejects_unsupported_content_type(client: TestClient) -> None:
+    storage = FakeStorage()
+
+    headers = auth_headers(client)
+    task_id = create_task(client, headers)
+    app = client.app
+    app.dependency_overrides[get_object_storage] = lambda: storage
+    response = client.post(
+        f"/attachments/tasks/{task_id}",
+        headers=headers,
+        files={"file": ("script.sh", b"echo hi", "application/x-sh")},
+    )
+    app.dependency_overrides.pop(get_object_storage, None)
+
+    assert response.status_code == 415
+    assert storage.files == {}
+
+
+def test_task_attachment_rejects_large_file(client: TestClient) -> None:
+    storage = FakeStorage()
+    settings = Settings(ATTACHMENT_MAX_BYTES=4)
+
+    headers = auth_headers(client)
+    task_id = create_task(client, headers)
+    app = client.app
+    app.dependency_overrides[get_object_storage] = lambda: storage
+    app.dependency_overrides[get_settings] = lambda: settings
+    response = client.post(
+        f"/attachments/tasks/{task_id}",
+        headers=headers,
+        files={"file": ("large.txt", b"hello", "text/plain")},
+    )
+    app.dependency_overrides.pop(get_object_storage, None)
+    app.dependency_overrides.pop(get_settings, None)
+
+    assert response.status_code == 413
+    assert storage.files == {}
+
+
+def test_task_attachment_sanitizes_filename(client: TestClient) -> None:
+    storage = FakeStorage()
+
+    headers = auth_headers(client)
+    task_id = create_task(client, headers)
+    app = client.app
+    app.dependency_overrides[get_object_storage] = lambda: storage
+    response = client.post(
+        f"/attachments/tasks/{task_id}",
+        headers=headers,
+        files={"file": ("../bad/name?.txt", b"hello", "text/plain")},
+    )
+    app.dependency_overrides.pop(get_object_storage, None)
+
+    assert response.status_code == 201
+    assert response.json()["filename"] == "name_.txt"

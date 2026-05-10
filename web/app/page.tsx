@@ -64,6 +64,19 @@ const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const tokenKey = "ameo_token";
 const themeKey = "ameo_theme";
 const statusOrder: TaskStatus[] = ["Backlog", "Todo", "In Progress", "Review", "Done"];
+const attachmentMaxBytes = 10 * 1024 * 1024;
+const allowedAttachmentTypes = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/zip"
+];
+const attachmentAccept = allowedAttachmentTypes.join(",");
 
 async function apiRequest<T>(
   path: string,
@@ -80,9 +93,26 @@ async function apiRequest<T>(
   const response = await fetch(`${apiBase}${path}`, { ...options, headers });
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    let detail = "";
+    try {
+      const parsed = JSON.parse(message) as { detail?: string };
+      detail = parsed.detail ?? "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || message || `Request failed: ${response.status}`);
   }
   return response.json() as Promise<T>;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function Home() {
@@ -115,6 +145,8 @@ export default function Home() {
   const [taskTitle, setTaskTitle] = useState("Create first real task");
   const [commentBody, setCommentBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachmentMessage, setAttachmentMessage] = useState("");
   const [searchText, setSearchText] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -413,19 +445,54 @@ export default function Home() {
     if (!token || !selectedTask || !file) {
       return;
     }
+    setAttachmentMessage("");
+    if (file.size === 0) {
+      setAttachmentMessage("Attachment cannot be empty.");
+      return;
+    }
+    if (file.size > attachmentMaxBytes) {
+      setAttachmentMessage(`Attachment must be ${formatBytes(attachmentMaxBytes)} or smaller.`);
+      return;
+    }
+    if (!allowedAttachmentTypes.includes(file.type)) {
+      setAttachmentMessage("This file type is not allowed.");
+      return;
+    }
     const formData = new FormData();
     formData.append("file", file);
-    const attachment = await apiRequest<Attachment>(`/attachments/tasks/${selectedTask.id}`, token, {
-      method: "POST",
-      body: formData
-    });
-    setAttachments((current) => [attachment, ...current]);
-    setFile(null);
-    event.currentTarget.reset();
+    setIsUploading(true);
+    try {
+      const attachment = await apiRequest<Attachment>(`/attachments/tasks/${selectedTask.id}`, token, {
+        method: "POST",
+        body: formData
+      });
+      setAttachments((current) => [attachment, ...current]);
+      setFile(null);
+      setAttachmentMessage("Attachment uploaded.");
+      event.currentTarget.reset();
+    } catch (error) {
+      setAttachmentMessage(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    setFile(event.target.files?.[0] ?? null);
+    const nextFile = event.target.files?.[0] ?? null;
+    setFile(nextFile);
+    if (!nextFile) {
+      setAttachmentMessage("");
+      return;
+    }
+    if (nextFile.size > attachmentMaxBytes) {
+      setAttachmentMessage(`Attachment must be ${formatBytes(attachmentMaxBytes)} or smaller.`);
+      return;
+    }
+    if (nextFile.type && !allowedAttachmentTypes.includes(nextFile.type)) {
+      setAttachmentMessage("This file type is not allowed.");
+      return;
+    }
+    setAttachmentMessage(`${nextFile.name} selected, ${formatBytes(nextFile.size)}.`);
   }
 
   return (
@@ -728,10 +795,11 @@ export default function Home() {
               </div>
             </div>
             <form className="form-panel" onSubmit={handleUploadAttachment}>
-              <input type="file" onChange={handleFileChange} disabled={!selectedTask} />
-              <button type="submit" disabled={!selectedTask || !file}>
-                Upload file
+              <input type="file" accept={attachmentAccept} onChange={handleFileChange} disabled={!selectedTask || isUploading} />
+              <button type="submit" disabled={!selectedTask || !file || isUploading}>
+                {isUploading ? "Uploading" : "Upload file"}
               </button>
+              {attachmentMessage ? <p className="form-message">{attachmentMessage}</p> : null}
             </form>
             <div className="detail-list">
               {attachments.map((attachment) => (

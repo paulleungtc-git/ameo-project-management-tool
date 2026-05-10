@@ -48,6 +48,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
       S3_REGION: ${S3_REGION:-garage}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      ATTACHMENT_MAX_BYTES: ${ATTACHMENT_MAX_BYTES:-10485760}
+      ATTACHMENT_ALLOWED_CONTENT_TYPES: ${ATTACHMENT_ALLOWED_CONTENT_TYPES:-image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/zip}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:

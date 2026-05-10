@@ -39,4 +39,6 @@ S3_ACCESS_KEY=replace-with-garage-access-key-id
 S3_SECRET_KEY=replace-with-garage-secret-access-key
 S3_REGION=garage
 S3_FORCE_PATH_STYLE=true
+ATTACHMENT_MAX_BYTES=10485760
+ATTACHMENT_ALLOWED_CONTENT_TYPES=image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv,application/zip
 ```
