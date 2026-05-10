@@ -17,6 +17,16 @@ type Workspace = {
   role: string;
 };
 
+type WorkspaceMember = {
+  id: number;
+  workspace_id: number;
+  user_id: number;
+  email: string;
+  name: string;
+  role: string;
+  created_at: string;
+};
+
 type Project = {
   id: number;
   workspace_id: number;
@@ -133,6 +143,7 @@ export default function Home() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
@@ -141,6 +152,8 @@ export default function Home() {
   const [password, setPassword] = useState("password123");
   const [name, setName] = useState("Owner");
   const [workspaceName, setWorkspaceName] = useState("Ameo Studio");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRole, setMemberRole] = useState("member");
   const [projectName, setProjectName] = useState("Launch");
   const [taskTitle, setTaskTitle] = useState("Create first real task");
   const [commentBody, setCommentBody] = useState("");
@@ -158,6 +171,7 @@ export default function Home() {
 
   const workspace = workspaces[0] ?? null;
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
+  const canManageMembers = workspace?.role === "owner" || workspace?.role === "admin";
 
   const counts = useMemo(
     () =>
@@ -252,6 +266,7 @@ export default function Home() {
     if (workspaceData.length === 0) {
       setProjects([]);
       setTasks([]);
+      setMembers([]);
       setSelectedTaskId(null);
       return;
     }
@@ -263,12 +278,14 @@ export default function Home() {
     const taskParams = applyFilters
       ? buildTaskQuery(workspaceId)
       : new URLSearchParams({ workspace_id: String(workspaceId) });
-    const [projectData, taskData] = await Promise.all([
+    const [projectData, taskData, memberData] = await Promise.all([
       apiRequest<Project[]>(`/projects?${projectParams.toString()}`, nextToken),
-      apiRequest<Task[]>(`/tasks?${taskParams.toString()}`, nextToken)
+      apiRequest<Task[]>(`/tasks?${taskParams.toString()}`, nextToken),
+      apiRequest<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, nextToken)
     ]);
     setProjects(projectData);
     setTasks(taskData);
+    setMembers(memberData);
     setSelectedTaskId((current) =>
       current && taskData.some((task) => task.id === current) ? current : taskData[0]?.id ?? null
     );
@@ -301,6 +318,7 @@ export default function Home() {
     setWorkspaces([]);
     setProjects([]);
     setTasks([]);
+    setMembers([]);
     setSelectedTaskId(null);
     setMessage("Signed out.");
   }
@@ -357,6 +375,64 @@ export default function Home() {
     });
     setProjects((current) => [project, ...current]);
     setProjectName("");
+  }
+
+  async function reloadMembers(nextToken = token) {
+    if (!nextToken || !workspace) {
+      return;
+    }
+    const memberData = await apiRequest<WorkspaceMember[]>(`/workspaces/${workspace.id}/members`, nextToken);
+    setMembers(memberData);
+  }
+
+  async function handleAddMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !workspace || !memberEmail.trim()) {
+      return;
+    }
+    try {
+      const member = await apiRequest<WorkspaceMember>(`/workspaces/${workspace.id}/members`, token, {
+        method: "POST",
+        body: JSON.stringify({ email: memberEmail.trim(), role: memberRole })
+      });
+      setMembers((current) => [member, ...current]);
+      setMemberEmail("");
+      setMessage("Member added.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not add member.");
+    }
+  }
+
+  async function handleUpdateMemberRole(member: WorkspaceMember, role: string) {
+    if (!token || !workspace) {
+      return;
+    }
+    try {
+      const updated = await apiRequest<WorkspaceMember>(`/workspaces/${workspace.id}/members/${member.id}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ role })
+      });
+      setMembers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setMessage("Member role updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update member.");
+      await reloadMembers(token);
+    }
+  }
+
+  async function handleRemoveMember(member: WorkspaceMember) {
+    if (!token || !workspace) {
+      return;
+    }
+    try {
+      await apiRequest<unknown>(`/workspaces/${workspace.id}/members/${member.id}`, token, {
+        method: "DELETE"
+      });
+      setMembers((current) => current.filter((item) => item.id !== member.id));
+      setMessage("Member removed.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not remove member.");
+    }
   }
 
   async function handleApplyFilters(event: FormEvent<HTMLFormElement>) {
@@ -670,6 +746,60 @@ export default function Home() {
               {projects.length === 0 ? <p className="empty-state">No projects yet.</p> : null}
             </div>
           </section>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Members</p>
+              <h2>Workspace access</h2>
+            </div>
+            <span>{members.length} members</span>
+          </div>
+          <form className="member-form" onSubmit={handleAddMember}>
+            <input
+              value={memberEmail}
+              onChange={(event) => setMemberEmail(event.target.value)}
+              placeholder="Existing user email"
+              disabled={!canManageMembers}
+            />
+            <select value={memberRole} onChange={(event) => setMemberRole(event.target.value)} disabled={!canManageMembers}>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+              <option value="owner">Owner</option>
+            </select>
+            <button type="submit" disabled={!canManageMembers || !memberEmail.trim()}>
+              Add member
+            </button>
+          </form>
+          <div className="member-list">
+            {members.map((member) => (
+              <article className="member-row" key={member.id}>
+                <div>
+                  <strong>{member.name}</strong>
+                  <small>{member.email}</small>
+                </div>
+                <select
+                  value={member.role}
+                  onChange={(event) => handleUpdateMemberRole(member, event.target.value)}
+                  disabled={!canManageMembers}
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                  <option value="owner">Owner</option>
+                </select>
+                <button
+                  className="secondary-button compact-button"
+                  type="button"
+                  onClick={() => handleRemoveMember(member)}
+                  disabled={!canManageMembers || member.user_id === user?.id}
+                >
+                  Remove
+                </button>
+              </article>
+            ))}
+            {members.length === 0 ? <p className="empty-state">No members loaded.</p> : null}
+          </div>
         </section>
 
         <section className="panel">

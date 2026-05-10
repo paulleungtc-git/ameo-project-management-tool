@@ -37,6 +37,25 @@ class WorkspaceRead(BaseModel):
     role: str
 
 
+class WorkspaceMemberRead(BaseModel):
+    id: int
+    workspace_id: int
+    user_id: int
+    email: str
+    name: str
+    role: str
+    created_at: datetime
+
+
+class WorkspaceMemberAdd(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    role: str = "member"
+
+
+class WorkspaceMemberUpdate(BaseModel):
+    role: str = Field(min_length=1, max_length=20)
+
+
 class ProjectCreate(BaseModel):
     workspace_id: int
     name: str = Field(min_length=1, max_length=180)

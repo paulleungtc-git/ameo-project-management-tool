@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Project, Task, User, WorkspaceMember
+from app.models import Project, Task, User, WorkspaceMember, WorkspaceRole
 
 
 def require_workspace_member(db: Session, user: User, workspace_id: int) -> WorkspaceMember:
@@ -14,6 +14,13 @@ def require_workspace_member(db: Session, user: User, workspace_id: int) -> Work
     )
     if membership is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
+    return membership
+
+
+def require_workspace_admin(db: Session, user: User, workspace_id: int) -> WorkspaceMember:
+    membership = require_workspace_member(db, user, workspace_id)
+    if membership.role not in {WorkspaceRole.OWNER.value, WorkspaceRole.ADMIN.value}:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Workspace admin access required")
     return membership
 
 

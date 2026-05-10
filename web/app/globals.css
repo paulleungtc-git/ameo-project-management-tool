@@ -318,10 +318,37 @@ h3 {
 
 .status-list,
 .project-list,
-.task-table {
+.task-table,
+.member-list {
   display: grid;
   gap: 0.85rem;
   margin-top: 1rem;
+}
+
+.member-form {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(14rem, 1fr) minmax(8rem, 0.35fr) auto;
+  margin-top: 1rem;
+}
+
+.member-row {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.3fr) auto;
+  padding: 0.85rem;
+}
+
+.member-row strong,
+.member-row small {
+  display: block;
+}
+
+.member-row small {
+  color: var(--muted);
 }
 
 .filter-bar {
@@ -459,6 +486,8 @@ h3 {
   .main-grid,
   .setup-grid,
   .detail-grid,
+  .member-form,
+  .member-row,
   .filter-bar {
     grid-template-columns: 1fr 1fr;
   }
@@ -466,6 +495,8 @@ h3 {
   .main-grid,
   .setup-grid,
   .detail-grid,
+  .member-form,
+  .member-row,
   .filter-bar {
     grid-template-columns: 1fr;
   }
