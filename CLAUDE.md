@@ -235,4 +235,18 @@ Implementation defaults:
 
 ## Common commands
 
-Document commands here once the stack is chosen.
+```sh
+# Backend tests
+backend/.venv/bin/pytest backend/tests
+
+# Web verification
+npm run lint --prefix web
+npm run build --prefix web
+
+# OpenAPI contract export
+backend/.venv/bin/python backend/scripts/export_openapi.py
+
+# Mobile verification
+flutter analyze mobile
+flutter test mobile
+```
