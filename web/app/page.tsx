@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "Backlog" | "Todo" | "In Progress" | "Review" | "Done";
 type TaskPriority = "Low" | "Medium" | "High";
@@ -42,6 +42,7 @@ type Task = {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  assignee_id: number | null;
   due_date: string | null;
 };
 
@@ -169,6 +170,7 @@ export default function Home() {
   const [memberRole, setMemberRole] = useState("member");
   const [projectName, setProjectName] = useState("Launch");
   const [taskTitle, setTaskTitle] = useState("Create first real task");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
   const [commentBody, setCommentBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -195,59 +197,7 @@ export default function Home() {
     [tasks]
   );
 
-  useEffect(() => {
-    if (!token || user) {
-      return;
-    }
-
-    let cancelled = false;
-    apiRequest<User>("/auth/me", token)
-      .then((currentUser) => {
-        if (!cancelled) {
-          setUser(currentUser);
-          return loadWorkspaceData(token);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          window.localStorage.removeItem(tokenKey);
-          setToken(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token, user]);
-
-  useEffect(() => {
-    window.localStorage.setItem(themeKey, theme);
-  }, [theme]);
-
-  useEffect(() => {
-    if (!selectedTaskId || !token) {
-      return;
-    }
-
-    let cancelled = false;
-    Promise.all([
-      apiRequest<Comment[]>(`/tasks/${selectedTaskId}/comments`, token),
-      apiRequest<ActivityEvent[]>(`/tasks/${selectedTaskId}/activity`, token),
-      apiRequest<Attachment[]>(`/attachments/tasks/${selectedTaskId}`, token)
-    ]).then(([commentData, activityData, attachmentData]) => {
-      if (!cancelled) {
-        setComments(commentData);
-        setActivity(activityData);
-        setAttachments(attachmentData);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTaskId, token]);
-
-  function buildTaskQuery(workspaceId: number) {
+  const buildTaskQuery = useCallback((workspaceId: number) => {
     const params = new URLSearchParams({ workspace_id: String(workspaceId) });
     if (searchText.trim()) {
       params.set("q", searchText.trim());
@@ -271,9 +221,9 @@ export default function Home() {
       params.set("due_to", dueTo);
     }
     return params;
-  }
+  }, [assigneeFilter, dueFrom, dueTo, priorityFilter, projectFilter, searchText, statusFilter]);
 
-  async function loadWorkspaceData(nextToken: string, applyFilters = false) {
+  const loadWorkspaceData = useCallback(async (nextToken: string, applyFilters = false) => {
     const workspaceData = await apiRequest<Workspace[]>("/workspaces", nextToken);
     setWorkspaces(workspaceData);
     if (workspaceData.length === 0) {
@@ -305,7 +255,59 @@ export default function Home() {
     setSelectedTaskId((current) =>
       current && taskData.some((task) => task.id === current) ? current : taskData[0]?.id ?? null
     );
-  }
+  }, [buildTaskQuery, searchText]);
+
+  useEffect(() => {
+    if (!token || user) {
+      return;
+    }
+
+    let cancelled = false;
+    apiRequest<User>("/auth/me", token)
+      .then((currentUser) => {
+        if (!cancelled) {
+          setUser(currentUser);
+          return loadWorkspaceData(token);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          window.localStorage.removeItem(tokenKey);
+          setToken(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadWorkspaceData, token, user]);
+
+  useEffect(() => {
+    window.localStorage.setItem(themeKey, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!selectedTaskId || !token) {
+      return;
+    }
+
+    let cancelled = false;
+    Promise.all([
+      apiRequest<Comment[]>(`/tasks/${selectedTaskId}/comments`, token),
+      apiRequest<ActivityEvent[]>(`/tasks/${selectedTaskId}/activity`, token),
+      apiRequest<Attachment[]>(`/attachments/tasks/${selectedTaskId}`, token)
+    ]).then(([commentData, activityData, attachmentData]) => {
+      if (!cancelled) {
+        setComments(commentData);
+        setActivity(activityData);
+        setAttachments(attachmentData);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTaskId, token]);
 
   async function loadTaskDetails(taskId: number, nextToken = token) {
     if (!nextToken) {
@@ -506,12 +508,46 @@ export default function Home() {
         project_id: projects[0].id,
         title: taskTitle,
         status: "Todo",
-        priority: "Medium"
+        priority: "Medium",
+        assignee_id: taskAssigneeId ? Number(taskAssigneeId) : null
       })
     });
     setTasks((current) => [task, ...current]);
     setSelectedTaskId(task.id);
     setTaskTitle("");
+    setTaskAssigneeId("");
+  }
+
+  async function handleUpdateSelectedTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !selectedTask) {
+      return;
+    }
+    const data = new FormData(event.currentTarget);
+    const title = String(data.get("title") ?? "").trim();
+    if (!title) {
+      return;
+    }
+    const description = String(data.get("description") ?? "");
+    const status = String(data.get("status") ?? "Todo") as TaskStatus;
+    const priority = String(data.get("priority") ?? "Medium") as TaskPriority;
+    const assigneeId = String(data.get("assignee_id") ?? "");
+    const dueDate = String(data.get("due_date") ?? "");
+    const updated = await apiRequest<Task>(`/tasks/${selectedTask.id}`, token, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title,
+        description,
+        status,
+        priority,
+        assignee_id: assigneeId ? Number(assigneeId) : null,
+        due_date: dueDate || null
+      })
+    });
+    setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+    setMessage("Task updated.");
+    await loadTaskDetails(updated.id, token);
+    await reloadNotifications(token);
   }
 
   async function advanceTask(task: Task) {
@@ -719,6 +755,18 @@ export default function Home() {
               placeholder="Task title"
               disabled={projects.length === 0}
             />
+            <select
+              value={taskAssigneeId}
+              onChange={(event) => setTaskAssigneeId(event.target.value)}
+              disabled={projects.length === 0}
+            >
+              <option value="">Unassigned</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.user_id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
             <button type="submit" disabled={projects.length === 0}>
               Create task
             </button>
@@ -883,13 +931,18 @@ export default function Home() {
               <option value="Medium">Medium</option>
               <option value="High">High</option>
             </select>
-            <input
+            <select
               value={assigneeFilter}
               onChange={(event) => setAssigneeFilter(event.target.value)}
-              placeholder="Assignee ID"
-              inputMode="numeric"
               disabled={!token}
-            />
+            >
+              <option value="">Any assignee</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.user_id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
             <input value={dueFrom} onChange={(event) => setDueFrom(event.target.value)} type="date" disabled={!token} />
             <input value={dueTo} onChange={(event) => setDueTo(event.target.value)} type="date" disabled={!token} />
             <div className="button-row filter-actions">
@@ -916,7 +969,10 @@ export default function Home() {
                   <small>{task.description || "No description"}</small>
                 </button>
                 <span>{projects.find((project) => project.id === task.project_id)?.name ?? "Project"}</span>
-                <span>{task.priority}</span>
+                <span>
+                  {task.priority}
+                  <small>{members.find((member) => member.user_id === task.assignee_id)?.name ?? "Unassigned"}</small>
+                </span>
                 <span className="status-pill">{task.status}</span>
                 <button className="secondary-button compact-button" type="button" onClick={() => advanceTask(task)}>
                   Next
@@ -963,6 +1019,48 @@ export default function Home() {
                 <h2>{selectedTask?.title ?? "No task selected"}</h2>
               </div>
             </div>
+            <form className="task-edit-form" key={selectedTask?.id ?? "empty"} onSubmit={handleUpdateSelectedTask}>
+              <input
+                name="title"
+                defaultValue={selectedTask?.title ?? ""}
+                placeholder="Task title"
+                disabled={!selectedTask}
+              />
+              <textarea
+                name="description"
+                defaultValue={selectedTask?.description ?? ""}
+                placeholder="Description"
+                disabled={!selectedTask}
+              />
+              <select name="status" defaultValue={selectedTask?.status ?? "Todo"} disabled={!selectedTask}>
+                {statusOrder.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="priority"
+                defaultValue={selectedTask?.priority ?? "Medium"}
+                disabled={!selectedTask}
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+              <select name="assignee_id" defaultValue={selectedTask?.assignee_id ?? ""} disabled={!selectedTask}>
+                <option value="">Unassigned</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.user_id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+              <input name="due_date" defaultValue={selectedTask?.due_date ?? ""} type="date" disabled={!selectedTask} />
+              <button type="submit" disabled={!selectedTask}>
+                Save task
+              </button>
+            </form>
             <form className="form-panel" onSubmit={handleCreateComment}>
               <input
                 value={commentBody}

@@ -43,7 +43,8 @@ body {
 }
 
 input,
-select {
+select,
+textarea {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -53,12 +54,18 @@ select {
   width: 100%;
 }
 
+textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
 input[type="file"] {
   padding: 0.58rem 0.85rem;
 }
 
 input:disabled,
 select:disabled,
+textarea:disabled,
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -196,6 +203,18 @@ button:hover {
   align-content: start;
   display: grid;
   gap: 0.75rem;
+}
+
+.task-edit-form {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.task-edit-form input:first-child,
+.task-edit-form textarea {
+  grid-column: 1 / -1;
 }
 
 .button-row {
@@ -491,6 +510,7 @@ h3 {
   .main-grid,
   .setup-grid,
   .detail-grid,
+  .task-edit-form,
   .member-form,
   .member-row,
   .filter-bar {
