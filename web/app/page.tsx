@@ -128,6 +128,19 @@ async function apiRequest<T>(
   return response.json() as Promise<T>;
 }
 
+async function apiBlob(path: string, token: string | null): Promise<Blob> {
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(`${apiBase}${path}`, { headers });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Request failed: ${response.status}`);
+  }
+  return response.blob();
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -629,6 +642,40 @@ export default function Home() {
     }
   }
 
+  async function handleDownloadAttachment(attachment: Attachment) {
+    if (!token) {
+      return;
+    }
+    try {
+      const blob = await apiBlob(`/attachments/${attachment.id}/download`, token);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = attachment.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setAttachmentMessage(error instanceof Error ? error.message : "Download failed.");
+    }
+  }
+
+  async function handleDeleteAttachment(attachment: Attachment) {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiRequest<unknown>(`/attachments/${attachment.id}`, token, {
+        method: "DELETE"
+      });
+      setAttachments((current) => current.filter((item) => item.id !== attachment.id));
+      setAttachmentMessage("Attachment deleted.");
+    } catch (error) {
+      setAttachmentMessage(error instanceof Error ? error.message : "Delete failed.");
+    }
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.target.files?.[0] ?? null;
     setFile(nextFile);
@@ -1100,8 +1147,26 @@ export default function Home() {
             <div className="detail-list">
               {attachments.map((attachment) => (
                 <article className="detail-item" key={attachment.id}>
-                  <strong>{attachment.filename}</strong>
-                  <small>{attachment.content_type} - {attachment.byte_size} bytes</small>
+                  <div>
+                    <strong>{attachment.filename}</strong>
+                    <small>{attachment.content_type} - {formatBytes(attachment.byte_size)}</small>
+                  </div>
+                  <div className="button-row">
+                    <button
+                      className="secondary-button compact-button"
+                      type="button"
+                      onClick={() => handleDownloadAttachment(attachment)}
+                    >
+                      Download
+                    </button>
+                    <button
+                      className="secondary-button compact-button"
+                      type="button"
+                      onClick={() => handleDeleteAttachment(attachment)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </article>
               ))}
               {selectedTask && attachments.length === 0 ? <p className="empty-state">No attachments yet.</p> : null}

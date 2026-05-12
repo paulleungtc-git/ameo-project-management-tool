@@ -1,3 +1,4 @@
+from io import BytesIO
 from typing import BinaryIO
 
 import boto3
@@ -8,6 +9,12 @@ from app.core.config import get_settings
 
 class ObjectStorage:
     def put_file(self, key: str, body: BinaryIO, content_type: str) -> None:
+        raise NotImplementedError
+
+    def get_file(self, key: str) -> bytes:
+        raise NotImplementedError
+
+    def delete_file(self, key: str) -> None:
         raise NotImplementedError
 
 
@@ -31,6 +38,15 @@ class S3ObjectStorage(ObjectStorage):
             key,
             ExtraArgs={"ContentType": content_type},
         )
+
+    def get_file(self, key: str) -> bytes:
+        body = BytesIO()
+        self.client.download_fileobj(self.bucket, key, body)
+        body.seek(0)
+        return body.read()
+
+    def delete_file(self, key: str) -> None:
+        self.client.delete_object(Bucket=self.bucket, Key=key)
 
 
 def get_object_storage() -> ObjectStorage:

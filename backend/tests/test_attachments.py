@@ -9,9 +9,17 @@ from app.storage import ObjectStorage, get_object_storage
 class FakeStorage(ObjectStorage):
     def __init__(self) -> None:
         self.files: dict[str, bytes] = {}
+        self.deleted: list[str] = []
 
     def put_file(self, key: str, body: BinaryIO, content_type: str) -> None:
         self.files[key] = body.read()
+
+    def get_file(self, key: str) -> bytes:
+        return self.files[key]
+
+    def delete_file(self, key: str) -> None:
+        self.deleted.append(key)
+        self.files.pop(key, None)
 
 
 def auth_headers(client: TestClient) -> dict[str, str]:
@@ -139,3 +147,33 @@ def test_task_attachment_sanitizes_filename(client: TestClient) -> None:
 
     assert response.status_code == 201
     assert response.json()["filename"] == "name_.txt"
+
+
+def test_task_attachment_download_and_delete(client: TestClient) -> None:
+    storage = FakeStorage()
+
+    headers = auth_headers(client)
+    task_id = create_task(client, headers)
+    app = client.app
+    app.dependency_overrides[get_object_storage] = lambda: storage
+    upload_response = client.post(
+        f"/attachments/tasks/{task_id}",
+        headers=headers,
+        files={"file": ("note.txt", b"hello", "text/plain")},
+    )
+    attachment_id = upload_response.json()["id"]
+
+    download_response = client.get(f"/attachments/{attachment_id}/download", headers=headers)
+    assert download_response.status_code == 200
+    assert download_response.content == b"hello"
+    assert download_response.headers["content-type"] == "text/plain; charset=utf-8"
+
+    delete_response = client.delete(f"/attachments/{attachment_id}", headers=headers)
+    app.dependency_overrides.pop(get_object_storage, None)
+
+    assert delete_response.status_code == 204
+    assert storage.files == {}
+    assert len(storage.deleted) == 1
+    list_response = client.get(f"/attachments/tasks/{task_id}", headers=headers)
+    assert list_response.status_code == 200
+    assert list_response.json() == []

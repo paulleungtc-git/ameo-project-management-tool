@@ -1,9 +1,11 @@
 from hashlib import sha256
 from io import BytesIO
 import re
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -32,6 +34,14 @@ def validate_attachment(content: bytes, content_type: str, settings: Settings) -
     allowed_content_types = settings.attachment_allowed_content_type_list
     if allowed_content_types and content_type not in allowed_content_types:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Attachment content type is not allowed")
+
+
+def require_task_attachment(db: Session, user: User, attachment_id: int) -> Attachment:
+    attachment = db.get(Attachment, attachment_id)
+    if attachment is None or attachment.owner_type != "task":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Attachment not found")
+    require_task_access(db, user, attachment.owner_id)
+    return attachment
 
 
 @router.get("/tasks/{task_id}", response_model=list[AttachmentRead])
@@ -87,3 +97,36 @@ async def upload_task_attachment(
     db.commit()
     db.refresh(attachment)
     return attachment
+
+
+@router.get("/{attachment_id}/download")
+def download_attachment(
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    storage: ObjectStorage = Depends(get_object_storage),
+) -> Response:
+    attachment = require_task_attachment(db, current_user, attachment_id)
+    content = storage.get_file(attachment.storage_key)
+    encoded_name = quote(attachment.filename)
+    return Response(
+        content,
+        media_type=attachment.content_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}",
+            "Content-Length": str(len(content)),
+        },
+    )
+
+
+@router.delete("/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_attachment(
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    storage: ObjectStorage = Depends(get_object_storage),
+) -> None:
+    attachment = require_task_attachment(db, current_user, attachment_id)
+    storage.delete_file(attachment.storage_key)
+    db.delete(attachment)
+    db.commit()
