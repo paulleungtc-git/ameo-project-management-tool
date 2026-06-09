@@ -143,6 +143,7 @@ jobs:
             sshpass
 
       - name: Upload compose files
+        shell: bash
         env:
           SSHPASS: ${{ secrets.SSH_PWD }}
         run: |
@@ -170,6 +171,7 @@ jobs:
           fi
 
       - name: Pull images and restart
+        shell: bash
         env:
           SSHPASS: ${{ secrets.SSH_PWD }}
         run: |
