@@ -31,6 +31,16 @@ class AuthTokenResponse(BaseModel):
     user: UserRead
 
 
+class UserUpdate(BaseModel):
+    email: str | None = Field(default=None, min_length=3, max_length=320)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class UserPasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=200)
+
+
 class WorkspaceRead(BaseModel):
     id: int
     name: str

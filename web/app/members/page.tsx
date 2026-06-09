@@ -284,6 +284,7 @@ export default function MembersPage() {
           <Link className="active" href="/members">
             Members
           </Link>
+          <Link href="/account">Account</Link>
         </nav>
         <div className="workspace-card">
           <span>Current workspace</span>
