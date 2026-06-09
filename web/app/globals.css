@@ -100,6 +100,21 @@ button:hover {
   background: var(--line);
 }
 
+.button-link {
+  align-items: center;
+  background: var(--accent);
+  border-radius: 6px;
+  color: #ffffff;
+  display: inline-flex;
+  font-weight: 700;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+}
+
+.button-link:hover {
+  background: var(--accent-strong);
+}
+
 .compact-button {
   padding: 0.45rem 0.65rem;
 }
@@ -258,6 +273,13 @@ button:hover {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.empty-panel {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
 .topbar,
 .panel-heading {
   align-items: center;
@@ -354,6 +376,64 @@ h3 {
   gap: 0.75rem;
   grid-template-columns: minmax(14rem, 1fr) minmax(8rem, 0.35fr) auto;
   margin-top: 1rem;
+}
+
+.member-management-grid {
+  align-items: start;
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.42fr);
+}
+
+.members-toolbar {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(14rem, 1fr) minmax(10rem, 0.28fr);
+  margin-top: 1rem;
+}
+
+.member-table {
+  display: grid;
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.member-table-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(15rem, 1.4fr) minmax(9rem, 0.65fr) minmax(7rem, 0.5fr) minmax(9rem, 0.7fr) minmax(8rem, 0.55fr);
+  min-width: 780px;
+  padding: 0.85rem 0;
+}
+
+.member-table-row:last-child {
+  border-bottom: 0;
+}
+
+.member-table-header {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding-top: 0;
+  text-transform: uppercase;
+}
+
+.member-identity strong,
+.member-identity small {
+  display: block;
+}
+
+.member-identity small,
+.member-table-row span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.member-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .member-row {
@@ -511,6 +591,8 @@ h3 {
   .setup-grid,
   .detail-grid,
   .task-edit-form,
+  .member-management-grid,
+  .members-toolbar,
   .member-form,
   .member-row,
   .filter-bar {
@@ -520,10 +602,17 @@ h3 {
   .main-grid,
   .setup-grid,
   .detail-grid,
+  .member-management-grid,
+  .members-toolbar,
   .member-form,
   .member-row,
   .filter-bar {
     grid-template-columns: 1fr;
+  }
+
+  .empty-panel {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

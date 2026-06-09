@@ -1,92 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-
-type TaskStatus = "Backlog" | "Todo" | "In Progress" | "Review" | "Done";
-type TaskPriority = "Low" | "Medium" | "High";
-
-type User = {
-  id: number;
-  email: string;
-  name: string;
-};
-
-type Workspace = {
-  id: number;
-  name: string;
-  role: string;
-};
-
-type WorkspaceMember = {
-  id: number;
-  workspace_id: number;
-  user_id: number;
-  email: string;
-  name: string;
-  role: string;
-  created_at: string;
-};
-
-type Project = {
-  id: number;
-  workspace_id: number;
-  name: string;
-  description: string;
-};
-
-type Task = {
-  id: number;
-  workspace_id: number;
-  project_id: number;
-  title: string;
-  description: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  assignee_id: number | null;
-  due_date: string | null;
-};
-
-type Comment = {
-  id: number;
-  task_id: number;
-  author_id: number;
-  body: string;
-  created_at: string;
-};
-
-type ActivityEvent = {
-  id: number;
-  task_id: number;
-  event_type: string;
-  payload: Record<string, unknown>;
-  created_at: string;
-};
-
-type Attachment = {
-  id: number;
-  filename: string;
-  content_type: string;
-  byte_size: number;
-  checksum: string;
-  created_at: string;
-};
-
-type Notification = {
-  id: number;
-  workspace_id: number;
-  user_id: number;
-  task_id: number | null;
-  event_type: string;
-  title: string;
-  body: string;
-  read_at: string | null;
-  created_at: string;
-};
-
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-const tokenKey = "ameo_token";
-const themeKey = "ameo_theme";
-const statusOrder: TaskStatus[] = ["Backlog", "Todo", "In Progress", "Review", "Done"];
+import {
+  apiBlob,
+  apiRequest,
+  statusOrder,
+  themeKey,
+  tokenKey,
+  type ActivityEvent,
+  type Attachment,
+  type Comment,
+  type Notification,
+  type Project,
+  type Task,
+  type TaskPriority,
+  type TaskStatus,
+  type User,
+  type Workspace,
+  type WorkspaceMember
+} from "./lib/api";
 const attachmentMaxBytes = 10 * 1024 * 1024;
 const allowedAttachmentTypes = [
   "image/png",
@@ -100,46 +33,6 @@ const allowedAttachmentTypes = [
   "application/zip"
 ];
 const attachmentAccept = allowedAttachmentTypes.join(",");
-
-async function apiRequest<T>(
-  path: string,
-  token: string | null,
-  options: RequestInit = {}
-): Promise<T> {
-  const headers = new Headers(options.headers);
-  if (!(options.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-  const response = await fetch(`${apiBase}${path}`, { ...options, headers });
-  if (!response.ok) {
-    const message = await response.text();
-    let detail = "";
-    try {
-      const parsed = JSON.parse(message) as { detail?: string };
-      detail = parsed.detail ?? "";
-    } catch {
-      detail = "";
-    }
-    throw new Error(detail || message || `Request failed: ${response.status}`);
-  }
-  return response.json() as Promise<T>;
-}
-
-async function apiBlob(path: string, token: string | null): Promise<Blob> {
-  const headers = new Headers();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-  const response = await fetch(`${apiBase}${path}`, { headers });
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
-  }
-  return response.blob();
-}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) {
@@ -179,8 +72,6 @@ export default function Home() {
   const [password, setPassword] = useState("password123");
   const [name, setName] = useState("Owner");
   const [workspaceName, setWorkspaceName] = useState("Ameo Studio");
-  const [memberEmail, setMemberEmail] = useState("");
-  const [memberRole, setMemberRole] = useState("member");
   const [projectName, setProjectName] = useState("Launch");
   const [taskTitle, setTaskTitle] = useState("Create first real task");
   const [taskAssigneeId, setTaskAssigneeId] = useState("");
@@ -199,7 +90,6 @@ export default function Home() {
 
   const workspace = workspaces[0] ?? null;
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
-  const canManageMembers = workspace?.role === "owner" || workspace?.role === "admin";
 
   const counts = useMemo(
     () =>
@@ -409,14 +299,6 @@ export default function Home() {
     setProjectName("");
   }
 
-  async function reloadMembers(nextToken = token) {
-    if (!nextToken || !workspace) {
-      return;
-    }
-    const memberData = await apiRequest<WorkspaceMember[]>(`/workspaces/${workspace.id}/members`, nextToken);
-    setMembers(memberData);
-  }
-
   async function reloadNotifications(nextToken = token) {
     if (!nextToken || !workspace) {
       return;
@@ -426,56 +308,6 @@ export default function Home() {
       nextToken
     );
     setNotifications(notificationData);
-  }
-
-  async function handleAddMember(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !workspace || !memberEmail.trim()) {
-      return;
-    }
-    try {
-      const member = await apiRequest<WorkspaceMember>(`/workspaces/${workspace.id}/members`, token, {
-        method: "POST",
-        body: JSON.stringify({ email: memberEmail.trim(), role: memberRole })
-      });
-      setMembers((current) => [member, ...current]);
-      setMemberEmail("");
-      setMessage("Member added.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not add member.");
-    }
-  }
-
-  async function handleUpdateMemberRole(member: WorkspaceMember, role: string) {
-    if (!token || !workspace) {
-      return;
-    }
-    try {
-      const updated = await apiRequest<WorkspaceMember>(`/workspaces/${workspace.id}/members/${member.id}`, token, {
-        method: "PATCH",
-        body: JSON.stringify({ role })
-      });
-      setMembers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setMessage("Member role updated.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not update member.");
-      await reloadMembers(token);
-    }
-  }
-
-  async function handleRemoveMember(member: WorkspaceMember) {
-    if (!token || !workspace) {
-      return;
-    }
-    try {
-      await apiRequest<unknown>(`/workspaces/${workspace.id}/members/${member.id}`, token, {
-        method: "DELETE"
-      });
-      setMembers((current) => current.filter((item) => item.id !== member.id));
-      setMessage("Member removed.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not remove member.");
-    }
   }
 
   async function handleApplyFilters(event: FormEvent<HTMLFormElement>) {
@@ -705,12 +537,12 @@ export default function Home() {
           </div>
         </div>
         <nav className="nav-list" aria-label="Primary">
-          <a className="active" href="#">
+          <Link className="active" href="/">
             Dashboard
-          </a>
-          <a href="#">Projects</a>
-          <a href="#">Tasks</a>
-          <a href="#">Members</a>
+          </Link>
+          <Link href="/#projects">Projects</Link>
+          <Link href="/#tasks">Tasks</Link>
+          <Link href="/members">Members</Link>
         </nav>
         <div className="workspace-card">
           <span>Current workspace</span>
@@ -861,7 +693,7 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel" id="projects">
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Projects</p>
@@ -891,22 +723,11 @@ export default function Home() {
             </div>
             <span>{members.length} members</span>
           </div>
-          <form className="member-form" onSubmit={handleAddMember}>
-            <input
-              value={memberEmail}
-              onChange={(event) => setMemberEmail(event.target.value)}
-              placeholder="Existing user email"
-              disabled={!canManageMembers}
-            />
-            <select value={memberRole} onChange={(event) => setMemberRole(event.target.value)} disabled={!canManageMembers}>
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-              <option value="owner">Owner</option>
-            </select>
-            <button type="submit" disabled={!canManageMembers || !memberEmail.trim()}>
-              Add member
-            </button>
-          </form>
+          <div className="button-row">
+            <Link className="button-link" href="/members">
+              Manage members
+            </Link>
+          </div>
           <div className="member-list">
             {members.map((member) => (
               <article className="member-row" key={member.id}>
@@ -914,30 +735,14 @@ export default function Home() {
                   <strong>{member.name}</strong>
                   <small>{member.email}</small>
                 </div>
-                <select
-                  value={member.role}
-                  onChange={(event) => handleUpdateMemberRole(member, event.target.value)}
-                  disabled={!canManageMembers}
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                  <option value="owner">Owner</option>
-                </select>
-                <button
-                  className="secondary-button compact-button"
-                  type="button"
-                  onClick={() => handleRemoveMember(member)}
-                  disabled={!canManageMembers || member.user_id === user?.id}
-                >
-                  Remove
-                </button>
+                <span className="status-pill">{member.role}</span>
               </article>
             ))}
             {members.length === 0 ? <p className="empty-state">No members loaded.</p> : null}
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" id="tasks">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Priority queue</p>
