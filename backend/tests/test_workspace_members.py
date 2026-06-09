@@ -74,7 +74,7 @@ def test_workspace_member_cannot_manage_members(client: TestClient) -> None:
     assert response.status_code == 403
 
 
-def test_workspace_keeps_an_owner(client: TestClient) -> None:
+def test_workspace_owner_can_temporarily_change_to_admin(client: TestClient) -> None:
     owner = register(client, "owner@example.com", "Owner")
     workspace_id = client.get("/workspaces", headers=auth_header(owner["access_token"])).json()[0]["id"]
     members = client.get(f"/workspaces/{workspace_id}/members", headers=auth_header(owner["access_token"])).json()
@@ -85,4 +85,5 @@ def test_workspace_keeps_an_owner(client: TestClient) -> None:
         headers=auth_header(owner["access_token"]),
         json={"role": "admin"},
     )
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["role"] == "admin"

@@ -543,7 +543,6 @@ export default function Home() {
           <Link href="/#projects">Projects</Link>
           <Link href="/#tasks">Tasks</Link>
           <Link href="/members">Members</Link>
-          <Link href="/account">Account</Link>
         </nav>
         <div className="workspace-card">
           <span>Current workspace</span>

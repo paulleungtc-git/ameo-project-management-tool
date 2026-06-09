@@ -19,17 +19,6 @@ def validate_workspace_role(value: str) -> str:
     return normalized
 
 
-def ensure_owner_remains(db: Session, workspace_id: int, excluding_member_id: int | None = None) -> None:
-    query = select(WorkspaceMember).where(
-        WorkspaceMember.workspace_id == workspace_id,
-        WorkspaceMember.role == WorkspaceRole.OWNER.value,
-    )
-    if excluding_member_id is not None:
-        query = query.where(WorkspaceMember.id != excluding_member_id)
-    if db.scalar(query) is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Workspace must keep an owner")
-
-
 def member_read(member: WorkspaceMember, user: User) -> WorkspaceMemberRead:
     return WorkspaceMemberRead(
         id=member.id,
@@ -115,8 +104,6 @@ def update_workspace_member(
     member = db.get(WorkspaceMember, member_id)
     if member is None or member.workspace_id != workspace_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace member not found")
-    if member.role == WorkspaceRole.OWNER.value and role != WorkspaceRole.OWNER.value:
-        ensure_owner_remains(db, workspace_id, excluding_member_id=member.id)
     member.role = role
     db.commit()
     db.refresh(member)
@@ -137,7 +124,5 @@ def remove_workspace_member(
     member = db.get(WorkspaceMember, member_id)
     if member is None or member.workspace_id != workspace_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace member not found")
-    if member.role == WorkspaceRole.OWNER.value:
-        ensure_owner_remains(db, workspace_id, excluding_member_id=member.id)
     db.delete(member)
     db.commit()

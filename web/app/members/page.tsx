@@ -208,10 +208,6 @@ export default function MembersPage() {
     if (!token || !workspace || !canManageMembers || role === member.role) {
       return;
     }
-    if (member.role === "owner" && role !== "owner" && ownerCount <= 1) {
-      setMessage("Workspace must keep an owner.");
-      return;
-    }
     setMessage("");
     setBusyMemberId(member.id);
     try {
@@ -242,10 +238,6 @@ export default function MembersPage() {
     }
     if (member.user_id === user?.id) {
       setMessage("You cannot remove yourself from this page.");
-      return;
-    }
-    if (member.role === "owner" && ownerCount <= 1) {
-      setMessage("Workspace must keep an owner.");
       return;
     }
     const confirmed = window.confirm(`Remove ${member.name} from ${workspace.name}?`);
@@ -284,7 +276,6 @@ export default function MembersPage() {
           <Link className="active" href="/members">
             Members
           </Link>
-          <Link href="/account">Account</Link>
         </nav>
         <div className="workspace-card">
           <span>Current workspace</span>
@@ -401,31 +392,22 @@ export default function MembersPage() {
                     <span role="columnheader">Actions</span>
                   </div>
                   {filteredMembers.map((member) => {
-                    const isLastOwner = member.role === "owner" && ownerCount <= 1;
                     const isCurrentUser = member.user_id === user?.id;
                     const isBusy = busyMemberId === member.id;
-                    const cannotManageReason = !canManageMembers
-                      ? "Only owners and admins can manage members."
-                      : isLastOwner
-                        ? "Workspace must keep an owner."
-                        : undefined;
+                    const cannotManageReason = !canManageMembers ? "Only owners and admins can manage members." : undefined;
                     return (
                       <article className="member-table-row" key={member.id} role="row">
                         <div className="member-identity" role="cell">
-                          {isCurrentUser ? (
-                            <Link className="member-profile-link" href="/account">
-                              <strong>{member.name}</strong>
-                            </Link>
-                          ) : (
+                          <Link className="member-profile-link" href={`/members/${member.id}`}>
                             <strong>{member.name}</strong>
-                          )}
+                          </Link>
                           <small>{member.email}</small>
                         </div>
                         <div role="cell">
                           <select
                             value={member.role}
                             onChange={(event) => handleUpdateMemberRole(member, event.target.value)}
-                            disabled={!canManageMembers || isBusy || isLastOwner}
+                            disabled={!canManageMembers || isBusy}
                             title={cannotManageReason}
                           >
                             {roleOptions.map((role) => (
@@ -439,19 +421,24 @@ export default function MembersPage() {
                         <span role="cell">{formatJoinedDate(member.created_at)}</span>
                         <div className="member-actions" role="cell">
                           {isCurrentUser ? (
-                            <Link className="secondary-button compact-button button-link-muted" href="/account">
-                              Edit account
+                            <Link className="secondary-button compact-button button-link-muted" href={`/members/${member.id}`}>
+                              Open profile
                             </Link>
                           ) : (
-                            <button
-                              className="secondary-button compact-button"
-                              type="button"
-                              onClick={() => handleRemoveMember(member)}
-                              disabled={!canManageMembers || isBusy || isLastOwner}
-                              title={cannotManageReason}
-                            >
-                              Remove
-                            </button>
+                            <div className="button-row">
+                              <Link className="secondary-button compact-button button-link-muted" href={`/members/${member.id}`}>
+                                Open
+                              </Link>
+                              <button
+                                className="secondary-button compact-button"
+                                type="button"
+                                onClick={() => handleRemoveMember(member)}
+                                disabled={!canManageMembers || isBusy}
+                                title={cannotManageReason}
+                              >
+                                Remove
+                              </button>
+                            </div>
                           )}
                         </div>
                       </article>
