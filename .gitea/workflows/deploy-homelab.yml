@@ -14,7 +14,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   REGISTRY: registry.lab.pltc.me
@@ -25,7 +25,7 @@ env:
 jobs:
   verify:
     name: Verify backend and web
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-rootless-actions
     container:
       image: catthehacker/ubuntu:act-latest
     steps:
@@ -71,7 +71,7 @@ jobs:
   build:
     name: Build and push images
     needs: verify
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-dind-rootless
     container:
       image: catthehacker/ubuntu:act-latest
     steps:
@@ -108,7 +108,7 @@ jobs:
   deploy:
     name: Pull and deploy on homelab VM
     needs: build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-rootless-actions
     container:
       image: catthehacker/ubuntu:act-latest
     env:
