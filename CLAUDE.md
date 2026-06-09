@@ -116,13 +116,31 @@ Locked baseline:
 - Deployment: Docker Compose first.
 - Auth: email/password first.
 - Task workflow: fixed statuses first.
-- User roles: Owner, Admin, Member first. Leave room for later imported or
-  external users without overbuilding that flow now.
+- User roles: Site Admin at the whole-installation level, plus Owner, Admin,
+  Member at the workspace level. Leave room for later imported or external
+  users without overbuilding that flow now.
 - Build sequence: backend and web first, mobile after the API/product model is
   stable.
 
 Keep the backend as the product source of truth for workspaces, projects, tasks,
 comments, attachments, activity, permissions, and notifications.
+
+Use separate role layers:
+
+```text
+Site Admin
+- whole-installation role on users
+- can manage global user/site access
+
+Workspace Owner/Admin/Member
+- per-workspace role on workspace_members
+- controls access inside one workspace
+```
+
+Site-admin bootstrap starts as a first-admin flow: a signed-in user may promote
+themselves only while no site admin exists. Workspace owner-retention enforcement
+is temporarily loose during early setup so the initial user can switch their
+workspace role before the site-admin recovery flow is tightened.
 
 Initial task statuses:
 
@@ -199,20 +217,20 @@ S3_FORCE_PATH_STYLE=true
 Use these choices when scaffolding the app:
 
 ```text
-+---------------+----------------------+
-| Area          | Decision             |
-+---------------+----------------------+
-| Backend       | FastAPI              |
-| Web           | Next.js + TypeScript |
-| Mobile        | Flutter              |
-| Database      | PostgreSQL           |
-| Attachments   | Garage               |
-| Deployment    | Docker Compose first |
-| Auth          | Email/password first |
-| Task workflow | Fixed statuses first |
-| User roles    | Owner/Admin/Member   |
-| First build   | Backend + web        |
-+---------------+----------------------+
++---------------+-----------------------------------+
+| Area          | Decision                          |
++---------------+-----------------------------------+
+| Backend       | FastAPI                           |
+| Web           | Next.js + TypeScript              |
+| Mobile        | Flutter                           |
+| Database      | PostgreSQL                        |
+| Attachments   | Garage                            |
+| Deployment    | Docker Compose first              |
+| Auth          | Email/password first              |
+| Task workflow | Fixed statuses first              |
+| User roles    | Site Admin + workspace roles      |
+| First build   | Backend + web                     |
++---------------+-----------------------------------+
 ```
 
 Implementation defaults:

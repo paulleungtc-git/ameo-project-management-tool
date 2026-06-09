@@ -52,12 +52,14 @@ export default function MemberDetailPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [siteUsers, setSiteUsers] = useState<User[]>([]);
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [siteAdminMessage, setSiteAdminMessage] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [isLoading, setIsLoading] = useState(() => {
@@ -67,6 +69,7 @@ export default function MemberDetailPage() {
     return Boolean(window.localStorage.getItem(tokenKey));
   });
   const [isSavingRole, setIsSavingRole] = useState(false);
+  const [isSavingSiteAdmin, setIsSavingSiteAdmin] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
@@ -74,6 +77,8 @@ export default function MemberDetailPage() {
   const member = members.find((item) => item.id === memberId) ?? null;
   const isCurrentUser = member?.user_id === user?.id;
   const canManageMembers = workspace?.role === "owner" || workspace?.role === "admin";
+  const targetSiteUser = member ? siteUsers.find((item) => item.id === member.user_id) : null;
+  const targetIsSiteAdmin = targetSiteUser?.is_site_admin ?? (isCurrentUser ? user?.is_site_admin ?? false : false);
 
   const assignedTasks = useMemo(
     () => tasks.filter((task) => member && task.assignee_id === member.user_id),
@@ -106,15 +111,17 @@ export default function MemberDetailPage() {
         }
         return Promise.all([
           apiRequest<WorkspaceMember[]>(`/workspaces/${currentWorkspace.id}/members`, token),
-          apiRequest<Task[]>(`/tasks?workspace_id=${currentWorkspace.id}`, token)
-        ]).then(([memberData, taskData]) => ({ currentUser, memberData, taskData }));
+          apiRequest<Task[]>(`/tasks?workspace_id=${currentWorkspace.id}`, token),
+          currentUser.is_site_admin ? apiRequest<User[]>("/site-admin/users", token) : Promise.resolve([])
+        ]).then(([memberData, taskData, siteUserData]) => ({ currentUser, memberData, siteUserData, taskData }));
       })
       .then((workspaceData) => {
         if (cancelled || workspaceData === null) {
           return;
         }
-        const { currentUser, memberData, taskData } = workspaceData;
+        const { currentUser, memberData, siteUserData, taskData } = workspaceData;
         setMembers(memberData);
+        setSiteUsers(siteUserData);
         setTasks(taskData);
         const currentMember = memberData.find((item) => item.id === memberId);
         if (currentMember?.user_id === currentUser.id) {
@@ -148,6 +155,7 @@ export default function MemberDetailPage() {
     setUser(null);
     setWorkspaces([]);
     setMembers([]);
+    setSiteUsers([]);
     setTasks([]);
     setIsLoading(false);
     setMessage("Signed out.");
@@ -206,6 +214,61 @@ export default function MemberDetailPage() {
       router.push("/members");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not remove member.");
+    }
+  }
+
+  async function handleBootstrapSiteAdmin() {
+    if (!token || !isCurrentUser) {
+      return;
+    }
+    setSiteAdminMessage("");
+    setIsSavingSiteAdmin(true);
+    try {
+      const updated = await apiRequest<User>("/site-admin/bootstrap", token, {
+        method: "POST"
+      });
+      setUser(updated);
+      setSiteUsers((current) => {
+        const withoutUpdated = current.filter((item) => item.id !== updated.id);
+        return [updated, ...withoutUpdated];
+      });
+      setSiteAdminMessage("You are now the site admin.");
+    } catch (error) {
+      setSiteAdminMessage(error instanceof Error ? error.message : "Could not bootstrap site admin.");
+    } finally {
+      setIsSavingSiteAdmin(false);
+    }
+  }
+
+  async function handleUpdateSiteAccess(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !member || !user?.is_site_admin) {
+      return;
+    }
+    const data = new FormData(event.currentTarget);
+    const isSiteAdmin = String(data.get("site_access") ?? "standard") === "site_admin";
+    if (isSiteAdmin === targetIsSiteAdmin) {
+      return;
+    }
+    setSiteAdminMessage("");
+    setIsSavingSiteAdmin(true);
+    try {
+      const updated = await apiRequest<User>(`/site-admin/users/${member.user_id}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ is_site_admin: isSiteAdmin })
+      });
+      setSiteUsers((current) => {
+        const withoutUpdated = current.filter((item) => item.id !== updated.id);
+        return [updated, ...withoutUpdated];
+      });
+      if (updated.id === user.id) {
+        setUser(updated);
+      }
+      setSiteAdminMessage("Site access updated.");
+    } catch (error) {
+      setSiteAdminMessage(error instanceof Error ? error.message : "Could not update site access.");
+    } finally {
+      setIsSavingSiteAdmin(false);
     }
   }
 
@@ -370,6 +433,10 @@ export default function MemberDetailPage() {
                 <span>Joined</span>
                 <strong>{formatJoinedDate(member.created_at)}</strong>
               </article>
+              <article>
+                <span>Site access</span>
+                <strong>{targetIsSiteAdmin ? "Site admin" : "Standard"}</strong>
+              </article>
             </section>
 
             <section className="main-grid">
@@ -451,6 +518,40 @@ export default function MemberDetailPage() {
                   </div>
                 )}
               </section>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Site access</p>
+                  <h2>Whole-site admin</h2>
+                </div>
+              </div>
+              {user?.is_site_admin ? (
+                <form className="form-panel" onSubmit={handleUpdateSiteAccess}>
+                  <select name="site_access" defaultValue={targetIsSiteAdmin ? "site_admin" : "standard"} disabled={isSavingSiteAdmin}>
+                    <option value="standard">Standard user</option>
+                    <option value="site_admin">Site admin</option>
+                  </select>
+                  <button type="submit" disabled={isSavingSiteAdmin}>
+                    {isSavingSiteAdmin ? "Saving" : "Save site access"}
+                  </button>
+                  {siteAdminMessage ? <p className="form-message">{siteAdminMessage}</p> : null}
+                </form>
+              ) : isCurrentUser ? (
+                <div className="detail-list">
+                  <article className="detail-item">
+                    <strong>Become first site admin</strong>
+                    <small>This works only while no site admin exists yet.</small>
+                  </article>
+                  <button type="button" onClick={handleBootstrapSiteAdmin} disabled={isSavingSiteAdmin}>
+                    {isSavingSiteAdmin ? "Saving" : "Make me site admin"}
+                  </button>
+                  {siteAdminMessage ? <p className="form-message">{siteAdminMessage}</p> : null}
+                </div>
+              ) : (
+                <p className="form-message">Only site admins can manage whole-site access.</p>
+              )}
             </section>
 
             {isCurrentUser ? (

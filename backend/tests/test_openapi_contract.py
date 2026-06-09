@@ -5,6 +5,9 @@ def test_openapi_contract_includes_core_routes(client: TestClient) -> None:
     response = client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
+    assert "/site-admin/bootstrap" in paths
+    assert "/site-admin/users" in paths
+    assert "/site-admin/users/{user_id}" in paths
     assert "/users/me" in paths
     assert "/users/me/password" in paths
     assert "/workspaces/{workspace_id}/members" in paths

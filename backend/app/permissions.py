@@ -5,6 +5,12 @@ from sqlalchemy.orm import Session
 from app.models import Project, Task, User, WorkspaceMember, WorkspaceRole
 
 
+def require_site_admin(user: User) -> User:
+    if not user.is_site_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Site admin access required")
+    return user
+
+
 def require_workspace_member(db: Session, user: User, workspace_id: int) -> WorkspaceMember:
     membership = db.scalar(
         select(WorkspaceMember).where(

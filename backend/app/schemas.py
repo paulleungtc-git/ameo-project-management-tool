@@ -7,6 +7,7 @@ class UserRead(BaseModel):
     id: int
     email: str
     name: str
+    is_site_admin: bool = False
     external_ref: str | None = None
 
     model_config = {"from_attributes": True}
@@ -39,6 +40,11 @@ class UserUpdate(BaseModel):
 class UserPasswordUpdate(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8, max_length=200)
+
+
+class SiteAdminUserUpdate(BaseModel):
+    is_active: bool | None = None
+    is_site_admin: bool | None = None
 
 
 class WorkspaceRead(BaseModel):
