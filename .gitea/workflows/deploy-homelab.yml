@@ -1,0 +1,282 @@
+name: Deploy Homelab
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - web/**
+      - docs/garage.toml
+      - docker-compose.prod.yml
+      - .gitea/workflows/deploy-homelab.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: registry.lab.pltc.me
+  HOMELAB_HOST: 192.168.210.249
+  COMPOSE_PROJECT_NAME: ameo-pm
+  PUBLIC_API_BASE_URL: http://192.168.210.249:8000
+
+jobs:
+  verify:
+    name: Verify backend and web
+    runs-on: ubuntu-22.04
+    container:
+      image: catthehacker/ubuntu:act-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run backend tests
+        working-directory: backend
+        run: pytest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Lint web
+        working-directory: web
+        run: npm run lint
+
+      - name: Build web
+        working-directory: web
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://192.168.210.249:8000
+        run: npm run build
+
+  build:
+    name: Build and push images
+    needs: verify
+    runs-on: ubuntu-22.04
+    container:
+      image: catthehacker/ubuntu:act-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build and push Docker images
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          COMMIT_SHA="${GITHUB_SHA:-$(git rev-parse HEAD)}"
+          BACKEND_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-backend"
+          WEB_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-web"
+
+          docker build \
+            --platform linux/amd64 \
+            -t "${BACKEND_IMAGE}:${COMMIT_SHA}" \
+            -t "${BACKEND_IMAGE}:latest" \
+            ./backend
+
+          docker build \
+            --platform linux/amd64 \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="${PUBLIC_API_BASE_URL}" \
+            -t "${WEB_IMAGE}:${COMMIT_SHA}" \
+            -t "${WEB_IMAGE}:latest" \
+            ./web
+
+          docker push "${BACKEND_IMAGE}:${COMMIT_SHA}"
+          docker push "${BACKEND_IMAGE}:latest"
+          docker push "${WEB_IMAGE}:${COMMIT_SHA}"
+          docker push "${WEB_IMAGE}:latest"
+
+  deploy:
+    name: Pull and deploy on homelab VM
+    needs: build
+    runs-on: ubuntu-22.04
+    container:
+      image: catthehacker/ubuntu:act-latest
+    env:
+      SSH_NAME: ${{ secrets.SSH_NAME }}
+      SSH_PWD: ${{ secrets.SSH_PWD }}
+      AMEO_ENV: ${{ secrets.AMEO_ENV }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify deploy variables
+        run: |
+          missing=""
+          for name in SSH_NAME SSH_PWD; do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              missing="$missing $name"
+            fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "Missing required Gitea values:$missing" >&2
+            echo "Set secrets.SSH_NAME and secrets.SSH_PWD for this repository." >&2
+            exit 1
+          fi
+
+      - name: Install SSH password client
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            openssh-client \
+            sshpass
+
+      - name: Upload compose files
+        env:
+          SSHPASS: ${{ secrets.SSH_PWD }}
+        run: |
+          set -euo pipefail
+          REMOTE_APP_DIR="/home/${SSH_NAME}/docker_ameo-project-management-tool"
+
+          sshpass -e ssh \
+            -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=60 \
+            "${SSH_NAME}@${HOMELAB_HOST}" \
+            "mkdir -p '${REMOTE_APP_DIR}'"
+
+          sshpass -e scp \
+            -o StrictHostKeyChecking=no \
+            docker-compose.prod.yml \
+            docs/garage.toml \
+            "${SSH_NAME}@${HOMELAB_HOST}:/tmp/"
+
+          if [ -n "${AMEO_ENV:-}" ]; then
+            printf '%s\n' "$AMEO_ENV" > /tmp/ameo-project-management-tool.env
+            sshpass -e scp \
+              -o StrictHostKeyChecking=no \
+              /tmp/ameo-project-management-tool.env \
+              "${SSH_NAME}@${HOMELAB_HOST}:/tmp/ameo-project-management-tool.env"
+          fi
+
+      - name: Pull images and restart
+        env:
+          SSHPASS: ${{ secrets.SSH_PWD }}
+        run: |
+          set -euo pipefail
+
+          COMMIT_SHA="${GITHUB_SHA:-$(git rev-parse HEAD)}"
+          BACKEND_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-backend:${COMMIT_SHA}"
+          WEB_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-web:${COMMIT_SHA}"
+          REMOTE_APP_DIR="/home/${SSH_NAME}/docker_ameo-project-management-tool"
+
+          sshpass -e ssh \
+            -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=60 \
+            "${SSH_NAME}@${HOMELAB_HOST}" \
+            "REMOTE_APP_DIR='${REMOTE_APP_DIR}' COMPOSE_PROJECT_NAME='${COMPOSE_PROJECT_NAME}' BACKEND_IMAGE='${BACKEND_IMAGE}' WEB_IMAGE='${WEB_IMAGE}' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          mkdir -p "$REMOTE_APP_DIR"
+          mv /tmp/docker-compose.prod.yml "$REMOTE_APP_DIR/docker-compose.prod.yml"
+          mv /tmp/garage.toml "$REMOTE_APP_DIR/garage.toml"
+
+          if [ -f /tmp/ameo-project-management-tool.env ]; then
+            mv /tmp/ameo-project-management-tool.env "$REMOTE_APP_DIR/.env"
+            chmod 600 "$REMOTE_APP_DIR/.env"
+          fi
+
+          cd "$REMOTE_APP_DIR"
+
+          export BACKEND_IMAGE
+          export WEB_IMAGE
+
+          docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" pull backend web
+          docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" up -d --remove-orphans
+
+          garage() {
+            docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" exec -T garage /garage "$@"
+          }
+
+          for attempt in $(seq 1 30); do
+            if garage status >/dev/null 2>&1; then
+              break
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs --tail 100 garage || true
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          env_value() {
+            key="$1"
+            default_value="$2"
+
+            if [ -f .env ]; then
+              value="$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' .env)"
+              if [ -n "$value" ]; then
+                printf '%s' "$value"
+                return
+              fi
+            fi
+
+            printf '%s' "$default_value"
+          }
+
+          BUCKET="$(env_value S3_BUCKET attachments)"
+          KEY_NAME="$(env_value GARAGE_KEY_NAME ameo-app)"
+          ACCESS_KEY="$(env_value S3_ACCESS_KEY GK414d454f4445564143434553)"
+          SECRET_KEY="$(env_value S3_SECRET_KEY 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f)"
+          ZONE="$(env_value GARAGE_ZONE dc1)"
+          CAPACITY="$(env_value GARAGE_CAPACITY 1G)"
+
+          status="$(garage status 2>/dev/null || true)"
+          node_id="$(printf '%s\n' "$status" | awk '/NO ROLE ASSIGNED/ {print $1; exit}')"
+
+          if [ -n "$node_id" ]; then
+            current_version="$(garage layout show 2>/dev/null | awk '/Current cluster layout version:/ {print $5; exit}')"
+            next_version=$((current_version + 1))
+            garage layout assign -z "$ZONE" -c "$CAPACITY" "$node_id" >/dev/null
+            garage layout apply --version "$next_version" >/dev/null
+          fi
+
+          if ! garage bucket info "$BUCKET" >/dev/null 2>&1; then
+            garage bucket create "$BUCKET" >/dev/null
+          fi
+
+          if ! garage key info "$KEY_NAME" >/dev/null 2>&1; then
+            garage key import --yes -n "$KEY_NAME" "$ACCESS_KEY" "$SECRET_KEY" >/dev/null
+          fi
+
+          garage bucket allow --read --write --owner "$BUCKET" --key "$KEY_NAME" >/dev/null
+          docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" restart backend
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health; then
+              break
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs --tail 100 backend || true
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
+          docker image prune -f
+          REMOTE

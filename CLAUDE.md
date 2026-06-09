@@ -250,3 +250,29 @@ backend/.venv/bin/python backend/scripts/export_openapi.py
 flutter analyze mobile
 flutter test mobile
 ```
+
+## Homelab deployment
+
+Gitea Actions deploys backend and web to the homelab VM at `192.168.210.249`
+using `.gitea/workflows/deploy-homelab.yml`.
+
+Required Gitea values:
+
+- Repository secret `SSH_NAME`: SSH username on the VM.
+- Repository secret `SSH_PWD`: SSH password on the VM.
+- Optional repository secret `AMEO_ENV`: full `.env` contents for the remote
+  Docker Compose app.
+
+The workflow builds and pushes:
+
+```text
+registry.lab.pltc.me/$GITHUB_REPOSITORY-backend:$GITHUB_SHA
+registry.lab.pltc.me/$GITHUB_REPOSITORY-web:$GITHUB_SHA
+```
+
+Then it SSHes to the VM, uploads `docker-compose.prod.yml` and `garage.toml`,
+pulls those image tags, and runs:
+
+```sh
+docker compose -f docker-compose.prod.yml -p ameo-pm up -d --remove-orphans
+```
