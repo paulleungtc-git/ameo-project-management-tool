@@ -412,7 +412,13 @@ export default function MembersPage() {
                     return (
                       <article className="member-table-row" key={member.id} role="row">
                         <div className="member-identity" role="cell">
-                          <strong>{member.name}</strong>
+                          {isCurrentUser ? (
+                            <Link className="member-profile-link" href="/account">
+                              <strong>{member.name}</strong>
+                            </Link>
+                          ) : (
+                            <strong>{member.name}</strong>
+                          )}
                           <small>{member.email}</small>
                         </div>
                         <div role="cell">
@@ -432,19 +438,21 @@ export default function MembersPage() {
                         <strong role="cell">{openTaskCountByUserId.get(member.user_id) ?? 0}</strong>
                         <span role="cell">{formatJoinedDate(member.created_at)}</span>
                         <div className="member-actions" role="cell">
-                          <button
-                            className="secondary-button compact-button"
-                            type="button"
-                            onClick={() => handleRemoveMember(member)}
-                            disabled={!canManageMembers || isBusy || isLastOwner || isCurrentUser}
-                            title={
-                              isCurrentUser
-                                ? "You cannot remove yourself from this page."
-                                : cannotManageReason
-                            }
-                          >
-                            Remove
-                          </button>
+                          {isCurrentUser ? (
+                            <Link className="secondary-button compact-button button-link-muted" href="/account">
+                              Edit account
+                            </Link>
+                          ) : (
+                            <button
+                              className="secondary-button compact-button"
+                              type="button"
+                              onClick={() => handleRemoveMember(member)}
+                              disabled={!canManageMembers || isBusy || isLastOwner}
+                              title={cannotManageReason}
+                            >
+                              Remove
+                            </button>
+                          )}
                         </div>
                       </article>
                     );

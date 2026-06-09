@@ -115,6 +115,15 @@ button:hover {
   background: var(--accent-strong);
 }
 
+.button-link-muted {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.button-link-muted:hover {
+  background: var(--line);
+}
+
 .compact-button {
   padding: 0.45rem 0.65rem;
 }
@@ -429,6 +438,15 @@ h3 {
 .member-table-row span {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.member-profile-link {
+  color: var(--accent-strong);
+  display: inline-block;
+}
+
+.member-profile-link:hover {
+  text-decoration: underline;
 }
 
 .member-actions {
