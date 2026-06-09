@@ -146,7 +146,7 @@ export default function WorkspaceDetailPage() {
           <Link className="active" href={`/workspaces/${workspaceId}`}>
             Workspace
           </Link>
-          <Link href="/#projects">Projects</Link>
+          <Link href="/projects">Projects</Link>
           <Link href="/#tasks">Tasks</Link>
           <Link href="/members">Members</Link>
         </nav>
@@ -240,7 +240,9 @@ export default function WorkspaceDetailPage() {
                     <p className="eyebrow">Projects</p>
                     <h2>Workspace projects</h2>
                   </div>
-                  <span>{projects.length} projects</span>
+                  <Link className="secondary-button compact-button button-link-muted" href="/projects">
+                    View all
+                  </Link>
                 </div>
                 <div className="project-list">
                   {projects.map((project) => {

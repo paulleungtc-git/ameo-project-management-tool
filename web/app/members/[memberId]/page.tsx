@@ -343,7 +343,7 @@ export default function MemberDetailPage() {
         </div>
         <nav className="nav-list" aria-label="Primary">
           <Link href="/">Dashboard</Link>
-          <Link href="/#projects">Projects</Link>
+          <Link href="/projects">Projects</Link>
           <Link href="/#tasks">Tasks</Link>
           <Link className="active" href="/members">
             Members

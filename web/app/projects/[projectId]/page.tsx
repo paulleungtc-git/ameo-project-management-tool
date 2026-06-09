@@ -174,8 +174,8 @@ export default function ProjectDetailPage() {
         <nav className="nav-list" aria-label="Primary">
           <Link href="/">Dashboard</Link>
           {workspace ? <Link href={`/workspaces/${workspace.id}`}>Workspace</Link> : null}
-          <Link className="active" href={`/projects/${projectId}`}>
-            Project
+          <Link className="active" href="/projects">
+            Projects
           </Link>
           <Link href="/#tasks">Tasks</Link>
           <Link href="/members">Members</Link>

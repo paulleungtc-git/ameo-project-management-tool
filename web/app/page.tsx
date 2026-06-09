@@ -541,7 +541,7 @@ export default function Home() {
             Dashboard
           </Link>
           {workspace ? <Link href={`/workspaces/${workspace.id}`}>Workspace</Link> : null}
-          <Link href="/#projects">Projects</Link>
+          <Link href="/projects">Projects</Link>
           <Link href="/#tasks">Tasks</Link>
           <Link href="/members">Members</Link>
         </nav>
