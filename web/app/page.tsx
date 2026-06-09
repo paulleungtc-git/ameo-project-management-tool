@@ -540,15 +540,24 @@ export default function Home() {
           <Link className="active" href="/">
             Dashboard
           </Link>
+          {workspace ? <Link href={`/workspaces/${workspace.id}`}>Workspace</Link> : null}
           <Link href="/#projects">Projects</Link>
           <Link href="/#tasks">Tasks</Link>
           <Link href="/members">Members</Link>
         </nav>
-        <div className="workspace-card">
-          <span>Current workspace</span>
-          <strong>{workspace?.name ?? "Not signed in"}</strong>
-          <p>{user ? `${user.name} - ${workspace?.role ?? "member"}` : "Create or sign in first"}</p>
-        </div>
+        {workspace ? (
+          <Link className="workspace-card" href={`/workspaces/${workspace.id}`}>
+            <span>Current workspace</span>
+            <strong>{workspace.name}</strong>
+            <p>{user ? `${user.name} - ${workspace.role}` : "Create or sign in first"}</p>
+          </Link>
+        ) : (
+          <div className="workspace-card">
+            <span>Current workspace</span>
+            <strong>Not signed in</strong>
+            <p>Create or sign in first</p>
+          </div>
+        )}
       </aside>
 
       <section className="content">
@@ -702,13 +711,13 @@ export default function Home() {
             </div>
             <div className="project-list">
               {projects.map((project) => (
-                <article className="project-item" key={project.id}>
+                <Link className="project-item" href={`/projects/${project.id}`} key={project.id}>
                   <div>
                     <h3>{project.name}</h3>
                     <p>{project.description || "No description"}</p>
                   </div>
                   <span className="health">Active</span>
-                </article>
+                </Link>
               ))}
               {projects.length === 0 ? <p className="empty-state">No projects yet.</p> : null}
             </div>
@@ -730,13 +739,13 @@ export default function Home() {
           </div>
           <div className="member-list">
             {members.map((member) => (
-              <article className="member-row" key={member.id}>
+              <Link className="member-row" href={`/members/${member.id}`} key={member.id}>
                 <div>
                   <strong>{member.name}</strong>
                   <small>{member.email}</small>
                 </div>
                 <span className="status-pill">{member.role}</span>
-              </article>
+              </Link>
             ))}
             {members.length === 0 ? <p className="empty-state">No members loaded.</p> : null}
           </div>
@@ -820,7 +829,9 @@ export default function Home() {
                   <strong>{task.title}</strong>
                   <small>{task.description || "No description"}</small>
                 </button>
-                <span>{projects.find((project) => project.id === task.project_id)?.name ?? "Project"}</span>
+                <Link className="member-profile-link" href={`/projects/${task.project_id}`}>
+                  {projects.find((project) => project.id === task.project_id)?.name ?? "Project"}
+                </Link>
                 <span>
                   {task.priority}
                   <small>{members.find((member) => member.user_id === task.assignee_id)?.name ?? "Unassigned"}</small>
