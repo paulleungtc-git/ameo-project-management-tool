@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { apiRequest, themeKey, tokenKey, type Project, type Task, type User, type Workspace } from "../lib/api";
+import { notifyAuthChanged } from "../lib/auth";
 
 function formatRole(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1);
@@ -141,6 +142,7 @@ export default function ProjectsPage() {
           return;
         }
         window.localStorage.removeItem(tokenKey);
+        notifyAuthChanged();
         setToken(null);
         setUser(null);
         setWorkspaces([]);
@@ -157,6 +159,7 @@ export default function ProjectsPage() {
 
   function clearSession() {
     window.localStorage.removeItem(tokenKey);
+    notifyAuthChanged();
     setToken(null);
     setUser(null);
     setWorkspaces([]);

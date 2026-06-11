@@ -12,6 +12,7 @@ import {
   type Workspace,
   type WorkspaceMember
 } from "../../lib/api";
+import { notifyAuthChanged } from "../../lib/auth";
 
 const roleOptions = ["member", "admin", "owner"];
 
@@ -135,6 +136,7 @@ export default function MemberDetailPage() {
           return;
         }
         window.localStorage.removeItem(tokenKey);
+        notifyAuthChanged();
         setToken(null);
         setUser(null);
         setWorkspaces([]);
@@ -151,6 +153,7 @@ export default function MemberDetailPage() {
 
   function clearSession() {
     window.localStorage.removeItem(tokenKey);
+    notifyAuthChanged();
     setToken(null);
     setUser(null);
     setWorkspaces([]);

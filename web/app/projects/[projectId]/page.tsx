@@ -14,6 +14,7 @@ import {
   type Workspace,
   type WorkspaceMember
 } from "../../lib/api";
+import { notifyAuthChanged } from "../../lib/auth";
 
 type ProjectResources = [Task[], WorkspaceMember[]];
 
@@ -134,6 +135,7 @@ export default function ProjectDetailPage() {
           return;
         }
         window.localStorage.removeItem(tokenKey);
+        notifyAuthChanged();
         setToken(null);
         setUser(null);
         setWorkspaces([]);
@@ -151,6 +153,7 @@ export default function ProjectDetailPage() {
 
   function clearSession() {
     window.localStorage.removeItem(tokenKey);
+    notifyAuthChanged();
     setToken(null);
     setUser(null);
     setWorkspaces([]);

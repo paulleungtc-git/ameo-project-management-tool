@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthGuard } from "./lib/auth";
 
 export const metadata: Metadata = {
   title: "Ameo",
@@ -13,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthGuard>{children}</AuthGuard>
+      </body>
     </html>
   );
 }

@@ -20,6 +20,7 @@ import {
   type Workspace,
   type WorkspaceMember
 } from "./lib/api";
+import { notifyAuthChanged } from "./lib/auth";
 const attachmentMaxBytes = 10 * 1024 * 1024;
 const allowedAttachmentTypes = [
   "image/png",
@@ -68,10 +69,6 @@ export default function Home() {
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [email, setEmail] = useState("owner@example.com");
-  const [password, setPassword] = useState("password123");
-  const [name, setName] = useState("Owner");
-  const [workspaceName, setWorkspaceName] = useState("Ameo Studio");
   const [projectName, setProjectName] = useState("Launch");
   const [taskTitle, setTaskTitle] = useState("Create first real task");
   const [taskAssigneeId, setTaskAssigneeId] = useState("");
@@ -177,6 +174,7 @@ export default function Home() {
         if (!cancelled) {
           window.localStorage.removeItem(tokenKey);
           setToken(null);
+          notifyAuthChanged();
         }
       });
 
@@ -226,12 +224,6 @@ export default function Home() {
     setAttachments(attachmentData);
   }
 
-  function saveSession(nextToken: string, nextUser: User) {
-    window.localStorage.setItem(tokenKey, nextToken);
-    setToken(nextToken);
-    setUser(nextUser);
-  }
-
   function clearSession() {
     window.localStorage.removeItem(tokenKey);
     setToken(null);
@@ -242,44 +234,7 @@ export default function Home() {
     setMembers([]);
     setNotifications([]);
     setSelectedTaskId(null);
-    setMessage("Signed out.");
-  }
-
-  async function handleRegister(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("");
-    try {
-      const response = await apiRequest<{ access_token: string; user: User }>("/auth/register", null, {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          name,
-          password,
-          workspace_name: workspaceName
-        })
-      });
-      saveSession(response.access_token, response.user);
-      await loadWorkspaceData(response.access_token);
-      setMessage("Workspace created.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Registration failed.");
-    }
-  }
-
-  async function handleLogin(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    setMessage("");
-    try {
-      const response = await apiRequest<{ access_token: string; user: User }>("/auth/login", null, {
-        method: "POST",
-        body: JSON.stringify({ email, password })
-      });
-      saveSession(response.access_token, response.user);
-      await loadWorkspaceData(response.access_token);
-      setMessage("Signed in.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Login failed.");
-    }
+    notifyAuthChanged();
   }
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
@@ -549,13 +504,13 @@ export default function Home() {
           <Link className="workspace-card" href={`/workspaces/${workspace.id}`}>
             <span>Current workspace</span>
             <strong>{workspace.name}</strong>
-            <p>{user ? `${user.name} - ${workspace.role}` : "Create or sign in first"}</p>
+            <p>{user ? `${user.name} - ${workspace.role}` : "Loading"}</p>
           </Link>
         ) : (
           <div className="workspace-card">
             <span>Current workspace</span>
-            <strong>Not signed in</strong>
-            <p>Create or sign in first</p>
+            <strong>Loading</strong>
+            <p>Fetching your workspace</p>
           </div>
         )}
       </aside>
@@ -582,36 +537,9 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="setup-grid">
-          <form className="panel form-panel" onSubmit={handleRegister}>
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Account</p>
-                <h2>Create workspace</h2>
-              </div>
-            </div>
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" />
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
-              type="password"
-            />
-            <input
-              value={workspaceName}
-              onChange={(event) => setWorkspaceName(event.target.value)}
-              placeholder="Workspace"
-            />
-            <div className="button-row">
-              <button type="submit">Register</button>
-              <button className="secondary-button" type="button" onClick={() => handleLogin()}>
-                Login
-              </button>
-            </div>
-            {message ? <p className="form-message">{message}</p> : null}
-          </form>
+        {message ? <p className="form-message">{message}</p> : null}
 
+        <section className="setup-grid">
           <form className="panel form-panel" onSubmit={handleCreateProject}>
             <div className="panel-heading">
               <div>

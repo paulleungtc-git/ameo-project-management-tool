@@ -14,6 +14,7 @@ import {
   type Workspace,
   type WorkspaceMember
 } from "../../lib/api";
+import { notifyAuthChanged } from "../../lib/auth";
 
 function formatRole(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1);
@@ -104,6 +105,7 @@ export default function WorkspaceDetailPage() {
           return;
         }
         window.localStorage.removeItem(tokenKey);
+        notifyAuthChanged();
         setToken(null);
         setUser(null);
         setWorkspaces([]);
@@ -121,6 +123,7 @@ export default function WorkspaceDetailPage() {
 
   function clearSession() {
     window.localStorage.removeItem(tokenKey);
+    notifyAuthChanged();
     setToken(null);
     setUser(null);
     setWorkspaces([]);

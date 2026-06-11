@@ -654,3 +654,25 @@ h3 {
     grid-template-columns: 6.5rem minmax(0, 1fr) 1.5rem;
   }
 }
+
+.auth-shell {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1.5rem;
+}
+
+.auth-panel {
+  max-width: 380px;
+  width: 100%;
+}
+
+.auth-panel .brand {
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.auth-panel .brand span {
+  color: var(--muted);
+}
