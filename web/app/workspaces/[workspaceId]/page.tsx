@@ -15,6 +15,7 @@ import {
   type WorkspaceMember
 } from "../../lib/api";
 import { notifyAuthChanged } from "../../lib/auth";
+import { Sidebar } from "../../components/sidebar";
 
 function formatRole(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1);
@@ -136,29 +137,7 @@ export default function WorkspaceDetailPage() {
 
   return (
     <main className="app-shell" data-theme={theme}>
-      <aside className="sidebar" aria-label="Workspace navigation">
-        <div className="brand">
-          <span className="brand-mark">A</span>
-          <div>
-            <strong>Ameo</strong>
-            <span>Project workspace</span>
-          </div>
-        </div>
-        <nav className="nav-list" aria-label="Primary">
-          <Link href="/">Dashboard</Link>
-          <Link className="active" href={`/workspaces/${workspaceId}`}>
-            Workspace
-          </Link>
-          <Link href="/projects">Projects</Link>
-          <Link href="/#tasks">Tasks</Link>
-          <Link href="/members">Members</Link>
-        </nav>
-        <div className="workspace-card">
-          <span>Current workspace</span>
-          <strong>{workspace?.name ?? "Not found"}</strong>
-          <p>{user ? `${user.name} - ${workspace?.role ?? "member"}` : "Create or sign in first"}</p>
-        </div>
-      </aside>
+      <Sidebar active="workspace" workspace={workspace} userName={user?.name} />
 
       <section className="content">
         <header className="topbar">

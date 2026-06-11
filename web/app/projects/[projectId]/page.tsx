@@ -15,12 +15,9 @@ import {
   type WorkspaceMember
 } from "../../lib/api";
 import { notifyAuthChanged } from "../../lib/auth";
+import { Sidebar } from "../../components/sidebar";
 
 type ProjectResources = [Task[], WorkspaceMember[]];
-
-function formatRole(role: string) {
-  return role.charAt(0).toUpperCase() + role.slice(1);
-}
 
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
@@ -166,29 +163,7 @@ export default function ProjectDetailPage() {
 
   return (
     <main className="app-shell" data-theme={theme}>
-      <aside className="sidebar" aria-label="Workspace navigation">
-        <div className="brand">
-          <span className="brand-mark">A</span>
-          <div>
-            <strong>Ameo</strong>
-            <span>Project workspace</span>
-          </div>
-        </div>
-        <nav className="nav-list" aria-label="Primary">
-          <Link href="/">Dashboard</Link>
-          {workspace ? <Link href={`/workspaces/${workspace.id}`}>Workspace</Link> : null}
-          <Link className="active" href="/projects">
-            Projects
-          </Link>
-          <Link href="/#tasks">Tasks</Link>
-          <Link href="/members">Members</Link>
-        </nav>
-        <div className="workspace-card">
-          <span>Current project</span>
-          <strong>{project?.name ?? "Not found"}</strong>
-          <p>{workspace ? `${workspace.name} - ${formatRole(workspace.role)}` : "Create or sign in first"}</p>
-        </div>
-      </aside>
+      <Sidebar active="projects" workspace={workspace} userName={user?.name} />
 
       <section className="content">
         <header className="topbar">

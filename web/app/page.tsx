@@ -21,6 +21,7 @@ import {
   type WorkspaceMember
 } from "./lib/api";
 import { notifyAuthChanged } from "./lib/auth";
+import { Sidebar } from "./components/sidebar";
 const attachmentMaxBytes = 10 * 1024 * 1024;
 const allowedAttachmentTypes = [
   "image/png",
@@ -483,37 +484,7 @@ export default function Home() {
 
   return (
     <main className="app-shell" data-theme={theme}>
-      <aside className="sidebar" aria-label="Workspace navigation">
-        <div className="brand">
-          <span className="brand-mark">A</span>
-          <div>
-            <strong>Ameo</strong>
-            <span>Project workspace</span>
-          </div>
-        </div>
-        <nav className="nav-list" aria-label="Primary">
-          <Link className="active" href="/">
-            Dashboard
-          </Link>
-          {workspace ? <Link href={`/workspaces/${workspace.id}`}>Workspace</Link> : null}
-          <Link href="/projects">Projects</Link>
-          <Link href="/#tasks">Tasks</Link>
-          <Link href="/members">Members</Link>
-        </nav>
-        {workspace ? (
-          <Link className="workspace-card" href={`/workspaces/${workspace.id}`}>
-            <span>Current workspace</span>
-            <strong>{workspace.name}</strong>
-            <p>{user ? `${user.name} - ${workspace.role}` : "Loading"}</p>
-          </Link>
-        ) : (
-          <div className="workspace-card">
-            <span>Current workspace</span>
-            <strong>Loading</strong>
-            <p>Fetching your workspace</p>
-          </div>
-        )}
-      </aside>
+      <Sidebar active="dashboard" workspace={workspace} userName={user?.name} />
 
       <section className="content">
         <header className="topbar">

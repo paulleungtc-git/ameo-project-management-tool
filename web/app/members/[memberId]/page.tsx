@@ -13,6 +13,7 @@ import {
   type WorkspaceMember
 } from "../../lib/api";
 import { notifyAuthChanged } from "../../lib/auth";
+import { Sidebar } from "../../components/sidebar";
 
 const roleOptions = ["member", "admin", "owner"];
 
@@ -336,28 +337,7 @@ export default function MemberDetailPage() {
 
   return (
     <main className="app-shell" data-theme={theme}>
-      <aside className="sidebar" aria-label="Workspace navigation">
-        <div className="brand">
-          <span className="brand-mark">A</span>
-          <div>
-            <strong>Ameo</strong>
-            <span>Project workspace</span>
-          </div>
-        </div>
-        <nav className="nav-list" aria-label="Primary">
-          <Link href="/">Dashboard</Link>
-          <Link href="/projects">Projects</Link>
-          <Link href="/#tasks">Tasks</Link>
-          <Link className="active" href="/members">
-            Members
-          </Link>
-        </nav>
-        <div className="workspace-card">
-          <span>Current workspace</span>
-          <strong>{workspace?.name ?? "Not signed in"}</strong>
-          <p>{user ? `${user.name} - ${workspace?.role ?? "member"}` : "Create or sign in first"}</p>
-        </div>
-      </aside>
+      <Sidebar active="members" workspace={workspace} userName={user?.name} />
 
       <section className="content">
         <header className="topbar">
