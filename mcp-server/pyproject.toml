@@ -1,0 +1,9 @@
+[project]
+name = "ameo-mcp-server"
+version = "0.1.0"
+description = "MCP server exposing the Ameo project management API to AI agents"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.27.2,<2",
+    "httpx>=0.28.1,<1",
+]

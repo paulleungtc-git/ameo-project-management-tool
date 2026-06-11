@@ -1,7 +1,9 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import os
+import secrets
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -11,9 +13,17 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.models import User
+from app.models import ApiToken, User, utcnow
 
 security = HTTPBearer(auto_error=False)
+
+API_TOKEN_PREFIX = "ameo_pat_"
+
+
+@dataclass(frozen=True)
+class AuthContext:
+    user: User
+    via_api_token: bool
 
 
 def hash_password(password: str) -> str:
@@ -51,15 +61,43 @@ def create_access_token(user: User) -> str:
     return jwt.encode(payload, settings.auth_jwt_secret, algorithm="HS256")
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    db: Session = Depends(get_db),
-) -> User:
-    if credentials is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
+def generate_api_token() -> str:
+    return API_TOKEN_PREFIX + secrets.token_urlsafe(32)
+
+
+def hash_api_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _as_utc(value: datetime) -> datetime:
+    # SQLite returns naive datetimes even for timezone-aware columns.
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _authenticate_api_token(token: str, db: Session) -> User:
+    api_token = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_api_token(token)))
+    if api_token is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid API token")
+    if api_token.expires_at is not None and _as_utc(api_token.expires_at) <= utcnow():
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "API token expired")
+
+    user = db.scalar(
+        select(User).where(User.id == api_token.user_id, User.is_active.is_(True)),
+    )
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
+
+    api_token.last_used_at = utcnow()
+    db.commit()
+    return user
+
+
+def _authenticate_jwt(token: str, db: Session) -> User:
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             get_settings().auth_jwt_secret,
             algorithms=["HS256"],
         )
@@ -71,3 +109,19 @@ def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
     return user
+
+
+def get_auth_context(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: Session = Depends(get_db),
+) -> AuthContext:
+    if credentials is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
+    token = credentials.credentials
+    if token.startswith(API_TOKEN_PREFIX):
+        return AuthContext(user=_authenticate_api_token(token, db), via_api_token=True)
+    return AuthContext(user=_authenticate_jwt(token, db), via_api_token=False)
+
+
+def get_current_user(context: AuthContext = Depends(get_auth_context)) -> User:
+    return context.user

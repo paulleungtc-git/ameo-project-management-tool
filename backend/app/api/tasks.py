@@ -103,6 +103,15 @@ def create_task(
     return task
 
 
+@router.get("/{task_id}", response_model=TaskRead)
+def get_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Task:
+    return require_task_access(db, current_user, task_id)
+
+
 @router.patch("/{task_id}", response_model=TaskRead)
 def update_task(
     task_id: int,

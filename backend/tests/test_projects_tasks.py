@@ -52,6 +52,12 @@ def test_project_and_task_crud(client: TestClient) -> None:
     assert list_response.status_code == 200
     assert len(list_response.json()) == 1
 
+    detail_response = client.get(f"/tasks/{task_id}", headers=headers)
+    assert detail_response.status_code == 200
+    assert detail_response.json()["title"] == "Create task API"
+
+    assert client.get("/tasks/999999", headers=headers).status_code == 404
+
 
 def test_task_rejects_invalid_status(client: TestClient) -> None:
     headers = auth_headers(client)

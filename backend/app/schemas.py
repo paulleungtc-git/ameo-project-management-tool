@@ -42,6 +42,26 @@ class UserPasswordUpdate(BaseModel):
     new_password: str = Field(min_length=8, max_length=200)
 
 
+class ApiTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class ApiTokenRead(BaseModel):
+    id: int
+    name: str
+    token_prefix: str
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ApiTokenCreated(ApiTokenRead):
+    token: str
+
+
 class SiteAdminUserUpdate(BaseModel):
     is_active: bool | None = None
     is_site_admin: bool | None = None

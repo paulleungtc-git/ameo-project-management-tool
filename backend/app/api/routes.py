@@ -1,12 +1,24 @@
 from fastapi import APIRouter
 
-from app.api import attachments, auth, comments, notifications, projects, site_admin, tasks, users, workspaces
+from app.api import (
+    api_tokens,
+    attachments,
+    auth,
+    comments,
+    notifications,
+    projects,
+    site_admin,
+    tasks,
+    users,
+    workspaces,
+)
 from app.core.config import get_settings
 
 router = APIRouter()
 router.include_router(auth.router)
 router.include_router(site_admin.router)
 router.include_router(users.router)
+router.include_router(api_tokens.router)
 router.include_router(workspaces.router)
 router.include_router(projects.router)
 router.include_router(tasks.router)

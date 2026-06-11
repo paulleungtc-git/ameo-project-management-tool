@@ -101,6 +101,7 @@ ameo-project-management-tool/
 +-- backend/
 +-- web/
 +-- mobile/
++-- mcp-server/
 +-- docs/
 ```
 
@@ -149,6 +150,28 @@ Backlog -> Todo -> In Progress -> Review -> Done
 ```
 
 Use a global fixed status order first.
+
+## Agent / MCP access
+
+The backend supports personal access tokens (PATs) alongside JWT sessions.
+Tokens are `ameo_pat_`-prefixed, stored as SHA-256 hashes, shown once at
+creation, and managed at `/users/me/tokens` (create/list/revoke). Token
+management endpoints reject PAT auth so a leaked token cannot mint more
+tokens. PATs carry the full privileges of their user; no scopes yet.
+
+`mcp-server/` is a standalone stdio MCP server wrapping the REST API
+(tools: list_workspaces, list_projects, list_tasks, get_task,
+comment_on_task, update_task_status). It reads:
+
+```env
+AMEO_API_URL=http://localhost:8000
+AMEO_API_TOKEN=ameo_pat_...
+```
+
+Workflow conventions: a task description is the locked plan for that work;
+agent plan deviations are posted as comments prefixed
+`[PLAN CHANGE PROPOSAL]` for human approval; the agent status-transition
+policy lives in `check_status_change` in `mcp-server/server.py`.
 
 ## Attachment direction
 
@@ -263,6 +286,9 @@ npm run build --prefix web
 
 # OpenAPI contract export
 backend/.venv/bin/python backend/scripts/export_openapi.py
+
+# MCP server setup (see mcp-server/README.md)
+cd mcp-server && python3 -m venv .venv && .venv/bin/pip install -e .
 
 # Mobile verification
 flutter analyze mobile
