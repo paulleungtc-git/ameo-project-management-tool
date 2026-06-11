@@ -2,13 +2,13 @@ metadata_dir = "/var/lib/garage/meta"
 data_dir = "/var/lib/garage/data"
 db_engine = "sqlite"
 
-# Single-node local development only. Production needs a reviewed layout,
-# replication factor, secrets, and backup plan.
+# Single-node layout. Secrets are NOT stored here: rpc_secret, admin_token,
+# and metrics_token come from the GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN, and
+# GARAGE_METRICS_TOKEN environment variables set in docker compose.
 replication_factor = 1
 
 rpc_bind_addr = "[::]:3901"
 rpc_public_addr = "garage:3901"
-rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
 
 [s3_api]
 s3_region = "garage"
@@ -22,5 +22,3 @@ index = "index.html"
 
 [admin]
 api_bind_addr = "[::]:3903"
-admin_token = "dev-admin-token-change-before-shared-use"
-metrics_token = "dev-metrics-token-change-before-shared-use"

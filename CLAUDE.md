@@ -304,8 +304,18 @@ Required Gitea values:
 
 - Repository secret `SSH_NAME`: SSH username on the VM.
 - Repository secret `SSH_PWD`: SSH password on the VM.
-- Optional repository secret `AMEO_ENV`: full `.env` contents for the remote
-  Docker Compose app.
+- Repository secret `AMEO_ENV`: full `.env` contents for the remote Docker
+  Compose app. Required since the prod compose file has no secret defaults;
+  it must define at least `POSTGRES_PASSWORD`, `DATABASE_URL`,
+  `AUTH_JWT_SECRET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `GARAGE_RPC_SECRET`,
+  `GARAGE_ADMIN_TOKEN`, and `GARAGE_METRICS_TOKEN`.
+
+Production hardening notes:
+
+- `docker-compose.prod.yml` publishes only the backend (8000) and web (3001)
+  ports; postgres and garage are reachable solely on the compose network.
+- `docs/garage.toml` carries no secrets; Garage reads them from
+  `GARAGE_*` environment variables.
 
 The workflow builds and pushes:
 

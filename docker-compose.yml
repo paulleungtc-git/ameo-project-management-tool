@@ -20,6 +20,10 @@ services:
     image: ${GARAGE_IMAGE:-dxflrs/garage:v1.1.0}
     restart: unless-stopped
     command: ["/garage", "server"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-0000000000000000000000000000000000000000000000000000000000000000}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-dev-admin-token-change-before-shared-use}
+      GARAGE_METRICS_TOKEN: ${GARAGE_METRICS_TOKEN:-dev-metrics-token-change-before-shared-use}
     ports:
       - "${GARAGE_S3_PORT:-3900}:3900"
       - "${GARAGE_RPC_PORT:-3901}:3901"
