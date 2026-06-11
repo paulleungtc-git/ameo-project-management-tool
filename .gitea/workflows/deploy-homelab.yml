@@ -20,7 +20,7 @@ env:
   REGISTRY: registry.lab.pltc.me
   HOMELAB_HOST: 192.168.210.249
   COMPOSE_PROJECT_NAME: ameo-pm
-  PUBLIC_API_BASE_URL: http://192.168.210.249:8000
+  PUBLIC_API_BASE_URL: ${{ secrets.PUBLIC_API_BASE_URL || 'http://192.168.210.249:8000' }}
 
 jobs:
   verify:
@@ -206,6 +206,10 @@ jobs:
           docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" pull backend web
           docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" up -d --remove-orphans
 
+          pg() {
+            docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" exec -T postgres "$@"
+          }
+
           garage() {
             docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" exec -T garage /garage "$@"
           }
@@ -238,12 +242,43 @@ jobs:
             printf '%s' "$default_value"
           }
 
+          PG_USER="$(env_value POSTGRES_USER ameo)"
+          PG_DB="$(env_value POSTGRES_DB ameo)"
+          PG_PASSWORD="$(env_value POSTGRES_PASSWORD "")"
+
+          for attempt in $(seq 1 30); do
+            if pg pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
+              break
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs --tail 100 postgres || true
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          if [ -n "$PG_PASSWORD" ]; then
+            # Sync the role password to .env. Local socket auth inside the
+            # container is trust, so this works regardless of the current
+            # password and is a no-op when it already matches. The password
+            # must not contain single quotes.
+            printf "ALTER USER %s WITH PASSWORD '%s';\n" "$PG_USER" "$PG_PASSWORD" \
+              | pg psql -U "$PG_USER" -d "$PG_DB" -q
+          fi
+
           BUCKET="$(env_value S3_BUCKET attachments)"
           KEY_NAME="$(env_value GARAGE_KEY_NAME ameo-app)"
-          ACCESS_KEY="$(env_value S3_ACCESS_KEY GK414d454f4445564143434553)"
-          SECRET_KEY="$(env_value S3_SECRET_KEY 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f)"
+          ACCESS_KEY="$(env_value S3_ACCESS_KEY "")"
+          SECRET_KEY="$(env_value S3_SECRET_KEY "")"
           ZONE="$(env_value GARAGE_ZONE dc1)"
           CAPACITY="$(env_value GARAGE_CAPACITY 1G)"
+
+          if [ -z "$ACCESS_KEY" ] || [ -z "$SECRET_KEY" ]; then
+            echo "S3_ACCESS_KEY and S3_SECRET_KEY must be set in .env (AMEO_ENV secret)" >&2
+            exit 1
+          fi
 
           status="$(garage status 2>/dev/null || true)"
           node_id="$(printf '%s\n' "$status" | awk '/NO ROLE ASSIGNED/ {print $1; exit}')"

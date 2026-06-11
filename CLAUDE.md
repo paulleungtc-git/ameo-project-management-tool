@@ -309,6 +309,18 @@ Required Gitea values:
   it must define at least `POSTGRES_PASSWORD`, `DATABASE_URL`,
   `AUTH_JWT_SECRET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `GARAGE_RPC_SECRET`,
   `GARAGE_ADMIN_TOKEN`, and `GARAGE_METRICS_TOKEN`.
+- Optional repository secret `PUBLIC_API_BASE_URL`: public API origin baked
+  into the web image at build time (e.g. `https://pm-api.example.com`).
+  Defaults to the LAN address when unset. When going public, also set
+  `CORS_ORIGINS` in `AMEO_ENV` to the public web origin.
+
+The deploy provisions idempotently on every run: it syncs the postgres role
+password to `POSTGRES_PASSWORD`, assigns the Garage layout, creates the
+bucket, imports the S3 key from `.env`, and grants access. Secret rotation is
+therefore: edit `AMEO_ENV`, push. Caveats: `POSTGRES_PASSWORD` must not
+contain single quotes, and rotating `S3_ACCESS_KEY`/`S3_SECRET_KEY` requires
+also changing `GARAGE_KEY_NAME` (the import is skipped when a key with the
+same name already exists).
 
 Production hardening notes:
 
