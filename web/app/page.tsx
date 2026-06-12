@@ -70,8 +70,8 @@ export default function Home() {
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [projectName, setProjectName] = useState("Launch");
-  const [taskTitle, setTaskTitle] = useState("Create first real task");
+  const [projectName, setProjectName] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
   const [taskAssigneeId, setTaskAssigneeId] = useState("");
   const [commentBody, setCommentBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -86,8 +86,15 @@ export default function Home() {
   const [dueTo, setDueTo] = useState("");
   const [message, setMessage] = useState("");
 
+  // UI/UX state enhancements
+  const [viewMode, setViewMode] = useState<"list" | "board">("list");
+  const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"details" | "attachments" | "activity">("details");
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+
   const workspace = workspaces[0] ?? null;
-  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
 
   const counts = useMemo(
     () =>
@@ -253,6 +260,7 @@ export default function Home() {
     });
     setProjects((current) => [project, ...current]);
     setProjectName("");
+    setIsProjectModalOpen(false);
   }
 
   async function reloadNotifications(nextToken = token) {
@@ -303,20 +311,28 @@ export default function Home() {
     if (!token || projects.length === 0) {
       return;
     }
+    const data = new FormData(event.currentTarget);
+    const title = String(data.get("title") ?? "").trim();
+    const projectId = Number(data.get("project_id") || projects[0].id);
+    const assigneeId = data.get("assignee_id") ? Number(data.get("assignee_id")) : null;
+    const priority = String(data.get("priority") ?? "Medium") as TaskPriority;
+    
+    if (!title) return;
+
     const task = await apiRequest<Task>("/tasks", token, {
       method: "POST",
       body: JSON.stringify({
-        project_id: projects[0].id,
-        title: taskTitle,
+        project_id: projectId,
+        title,
         status: "Todo",
-        priority: "Medium",
-        assignee_id: taskAssigneeId ? Number(taskAssigneeId) : null
+        priority,
+        assignee_id: assigneeId
       })
     });
     setTasks((current) => [task, ...current]);
     setSelectedTaskId(task.id);
-    setTaskTitle("");
-    setTaskAssigneeId("");
+    setIsTaskDrawerOpen(true);
+    setIsTaskModalOpen(false);
   }
 
   async function handleUpdateSelectedTask(event: FormEvent<HTMLFormElement>) {
@@ -493,6 +509,12 @@ export default function Home() {
             <h1>Project dashboard</h1>
           </div>
           <div className="button-row">
+            <button type="button" onClick={() => setIsTaskModalOpen(true)} disabled={projects.length === 0}>
+              ＋ New Task
+            </button>
+            <button className="secondary-button" type="button" onClick={() => setIsProjectModalOpen(true)} disabled={!token}>
+              ＋ New Project
+            </button>
             {user ? (
               <button className="secondary-button" type="button" onClick={clearSession}>
                 Sign out
@@ -509,56 +531,6 @@ export default function Home() {
         </header>
 
         {message ? <p className="form-message">{message}</p> : null}
-
-        <section className="setup-grid">
-          <form className="panel form-panel" onSubmit={handleCreateProject}>
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Projects</p>
-                <h2>Add project</h2>
-              </div>
-            </div>
-            <input
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              placeholder="Project name"
-              disabled={!token}
-            />
-            <button type="submit" disabled={!token || !workspace}>
-              Create project
-            </button>
-          </form>
-
-          <form className="panel form-panel" onSubmit={handleCreateTask}>
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Tasks</p>
-                <h2>Add task</h2>
-              </div>
-            </div>
-            <input
-              value={taskTitle}
-              onChange={(event) => setTaskTitle(event.target.value)}
-              placeholder="Task title"
-              disabled={projects.length === 0}
-            />
-            <select
-              value={taskAssigneeId}
-              onChange={(event) => setTaskAssigneeId(event.target.value)}
-              disabled={projects.length === 0}
-            >
-              <option value="">Unassigned</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.user_id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-            <button type="submit" disabled={projects.length === 0}>
-              Create task
-            </button>
-          </form>
-        </section>
 
         <section className="metrics" aria-label="Workspace summary">
           <article>
@@ -623,40 +595,31 @@ export default function Home() {
           </section>
         </section>
 
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Members</p>
-              <h2>Workspace access</h2>
-            </div>
-            <span>{members.length} members</span>
-          </div>
-          <div className="button-row">
-            <Link className="button-link" href="/members">
-              Manage members
-            </Link>
-          </div>
-          <div className="member-list">
-            {members.map((member) => (
-              <Link className="member-row" href={`/members/${member.id}`} key={member.id}>
-                <div>
-                  <strong>{member.name}</strong>
-                  <small>{member.email}</small>
-                </div>
-                <span className="status-pill">{member.role}</span>
-              </Link>
-            ))}
-            {members.length === 0 ? <p className="empty-state">No members loaded.</p> : null}
-          </div>
-        </section>
-
         <section className="panel" id="tasks">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Priority queue</p>
+              <p className="eyebrow">Workspace tasks</p>
               <h2>Tasks</h2>
             </div>
-            <span>{tasks.length} shown</span>
+            <div className="button-row" style={{ alignItems: "center" }}>
+              <div className="view-tabs">
+                <button
+                  type="button"
+                  className={`view-tab ${viewMode === "list" ? "active" : ""}`}
+                  onClick={() => setViewMode("list")}
+                >
+                  List View
+                </button>
+                <button
+                  type="button"
+                  className={`view-tab ${viewMode === "board" ? "active" : ""}`}
+                  onClick={() => setViewMode("board")}
+                >
+                  Board View
+                </button>
+              </div>
+              <span>{tasks.length} shown</span>
+            </div>
           </div>
           <form className="filter-bar" onSubmit={handleApplyFilters}>
             <input
@@ -714,35 +677,76 @@ export default function Home() {
               </button>
             </div>
           </form>
-          <div className="task-table">
-            <div className="task-row task-header">
-              <span>Task</span>
-              <span>Project</span>
-              <span>Priority</span>
-              <span>Status</span>
-              <span>Actions</span>
+
+          {viewMode === "list" ? (
+            <div className="task-table">
+              <div className="task-row task-header">
+                <span>Task</span>
+                <span>Project</span>
+                <span>Priority</span>
+                <span>Status</span>
+                <span>Actions</span>
+              </div>
+              {tasks.map((task) => (
+                <article className="task-row" key={task.id}>
+                  <button className="task-link" type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(true); }}>
+                    <strong>{task.title}</strong>
+                    <small>{task.description || "No description"}</small>
+                  </button>
+                  <Link className="member-profile-link" href={`/projects/${task.project_id}`}>
+                    {projects.find((project) => project.id === task.project_id)?.name ?? "Project"}
+                  </Link>
+                  <span style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
+                    <span className="priority-tag" data-priority={task.priority}>{task.priority}</span>
+                    <small>{members.find((member) => member.user_id === task.assignee_id)?.name ?? "Unassigned"}</small>
+                  </span>
+                  <span className="status-pill" data-status={task.status}>{task.status}</span>
+                  <button className="secondary-button compact-button" type="button" onClick={() => advanceTask(task)}>
+                    Next
+                  </button>
+                </article>
+              ))}
+              {tasks.length === 0 ? <p className="empty-state">No matching tasks.</p> : null}
             </div>
-            {tasks.map((task) => (
-              <article className="task-row" key={task.id}>
-                <button className="task-link" type="button" onClick={() => setSelectedTaskId(task.id)}>
-                  <strong>{task.title}</strong>
-                  <small>{task.description || "No description"}</small>
-                </button>
-                <Link className="member-profile-link" href={`/projects/${task.project_id}`}>
-                  {projects.find((project) => project.id === task.project_id)?.name ?? "Project"}
-                </Link>
-                <span>
-                  {task.priority}
-                  <small>{members.find((member) => member.user_id === task.assignee_id)?.name ?? "Unassigned"}</small>
-                </span>
-                <span className="status-pill">{task.status}</span>
-                <button className="secondary-button compact-button" type="button" onClick={() => advanceTask(task)}>
-                  Next
-                </button>
-              </article>
-            ))}
-            {tasks.length === 0 ? <p className="empty-state">No matching tasks.</p> : null}
-          </div>
+          ) : (
+            <div className="kanban-board">
+              {statusOrder.map((status) => {
+                const columnTasks = tasks.filter((t) => t.status === status);
+                return (
+                  <div className="kanban-column" key={status}>
+                    <div className="kanban-column-header">
+                      <h3>{status}</h3>
+                      <span className="kanban-column-count">{columnTasks.length}</span>
+                    </div>
+                    {columnTasks.map((task) => (
+                      <div
+                        className="kanban-card"
+                        key={task.id}
+                        onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(true); }}
+                      >
+                        <div className="kanban-card-title">{task.title}</div>
+                        <div className="kanban-card-meta">
+                          <div className="kanban-card-tags">
+                            <span className="priority-tag" data-priority={task.priority}>
+                              {task.priority}
+                            </span>
+                          </div>
+                          <span style={{ opacity: 0.85 }}>
+                            {members.find((m) => m.user_id === task.assignee_id)?.name?.split(" ")[0] ?? "—"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {columnTasks.length === 0 ? (
+                      <p className="empty-state" style={{ padding: "1.5rem 0.5rem", fontSize: "0.8rem" }}>
+                        No tasks
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="panel">
@@ -773,140 +777,254 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="detail-grid">
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Selected task</p>
-                <h2>{selectedTask?.title ?? "No task selected"}</h2>
-              </div>
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Members</p>
+              <h2>Workspace access</h2>
             </div>
-            <form className="task-edit-form" key={selectedTask?.id ?? "empty"} onSubmit={handleUpdateSelectedTask}>
-              <input
-                name="title"
-                defaultValue={selectedTask?.title ?? ""}
-                placeholder="Task title"
-                disabled={!selectedTask}
-              />
-              <textarea
-                name="description"
-                defaultValue={selectedTask?.description ?? ""}
-                placeholder="Description"
-                disabled={!selectedTask}
-              />
-              <select name="status" defaultValue={selectedTask?.status ?? "Todo"} disabled={!selectedTask}>
-                {statusOrder.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
+            <span>{members.length} members</span>
+          </div>
+          <div className="button-row" style={{ marginBottom: "1rem" }}>
+            <Link className="button-link" href="/members">
+              Manage members
+            </Link>
+          </div>
+          <div className="member-list">
+            {members.map((member) => (
+              <Link className="member-row" href={`/members/${member.id}`} key={member.id}>
+                <div>
+                  <strong>{member.name}</strong>
+                  <small>{member.email}</small>
+                </div>
+                <span className="status-pill" data-status={member.role}>{member.role}</span>
+              </Link>
+            ))}
+            {members.length === 0 ? <p className="empty-state">No members loaded.</p> : null}
+          </div>
+        </section>
+
+        {/* Task Details Drawer Backdrop */}
+        <div
+          className={`drawer-backdrop ${isTaskDrawerOpen && selectedTask ? "active" : ""}`}
+          onClick={() => setIsTaskDrawerOpen(false)}
+        />
+
+        {/* Task Details Drawer */}
+        <aside className={`drawer ${isTaskDrawerOpen && selectedTask ? "open" : ""}`}>
+          <div className="drawer-header">
+            <div>
+              <p className="eyebrow">Task details</p>
+              <h2>{selectedTask?.title || "No task selected"}</h2>
+            </div>
+            <button className="drawer-close" type="button" onClick={() => setIsTaskDrawerOpen(false)}>
+              &times;
+            </button>
+          </div>
+          <div className="drawer-tabs">
+            <button
+              type="button"
+              className={`drawer-tab ${drawerTab === "details" ? "active" : ""}`}
+              onClick={() => setDrawerTab("details")}
+            >
+              Details
+            </button>
+            <button
+              type="button"
+              className={`drawer-tab ${drawerTab === "attachments" ? "active" : ""}`}
+              onClick={() => setDrawerTab("attachments")}
+            >
+              Attachments ({attachments.length})
+            </button>
+            <button
+              type="button"
+              className={`drawer-tab ${drawerTab === "activity" ? "active" : ""}`}
+              onClick={() => setDrawerTab("activity")}
+            >
+              Activity
+            </button>
+          </div>
+
+          <div className="drawer-body">
+            {selectedTask && drawerTab === "details" && (
+              <>
+                <form className="task-edit-form" key={selectedTask.id} onSubmit={handleUpdateSelectedTask}>
+                  <input
+                    name="title"
+                    defaultValue={selectedTask.title}
+                    placeholder="Task title"
+                  />
+                  <textarea
+                    name="description"
+                    defaultValue={selectedTask.description ?? ""}
+                    placeholder="Description"
+                  />
+                  <select name="status" defaultValue={selectedTask.status}>
+                    {statusOrder.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                  <select name="priority" defaultValue={selectedTask.priority}>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                  <select name="assignee_id" defaultValue={selectedTask.assignee_id ?? ""}>
+                    <option value="">Unassigned</option>
+                    {members.map((member) => (
+                      <option key={member.id} value={member.user_id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input name="due_date" defaultValue={selectedTask.due_date ?? ""} type="date" />
+                  <button type="submit" style={{ gridColumn: "1 / -1" }}>
+                    Save changes
+                  </button>
+                </form>
+
+                <hr style={{ border: 0, borderBottom: "1px solid var(--line)", margin: "1.5rem 0" }} />
+
+                <div style={{ display: "grid", gap: "0.75rem" }}>
+                  <h3>Comments</h3>
+                  <form className="form-panel" onSubmit={handleCreateComment}>
+                    <input
+                      value={commentBody}
+                      onChange={(event) => setCommentBody(event.target.value)}
+                      placeholder="Add a comment"
+                    />
+                    <button type="submit" disabled={!commentBody.trim()}>
+                      Comment
+                    </button>
+                  </form>
+                  <div className="detail-list">
+                    {comments.map((comment) => (
+                      <article className="detail-item" key={comment.id}>
+                        <strong>{comment.body}</strong>
+                        <small>{new Date(comment.created_at).toLocaleString()}</small>
+                      </article>
+                    ))}
+                    {comments.length === 0 ? <p className="empty-state">No comments yet.</p> : null}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {selectedTask && drawerTab === "attachments" && (
+              <div style={{ display: "grid", gap: "1rem" }}>
+                <h3>Attachments</h3>
+                <form className="form-panel" onSubmit={handleUploadAttachment}>
+                  <input type="file" accept={attachmentAccept} onChange={handleFileChange} disabled={isUploading} />
+                  <button type="submit" disabled={!file || isUploading}>
+                    {isUploading ? "Uploading..." : "Upload file"}
+                  </button>
+                  {attachmentMessage ? <p className="form-message">{attachmentMessage}</p> : null}
+                </form>
+                <div className="detail-list">
+                  {attachments.map((attachment) => (
+                    <article className="detail-item" key={attachment.id}>
+                      <div>
+                        <strong>{attachment.filename}</strong>
+                        <small>{attachment.content_type} - {formatBytes(attachment.byte_size)}</small>
+                      </div>
+                      <div className="button-row">
+                        <button
+                          className="secondary-button compact-button"
+                          type="button"
+                          onClick={() => handleDownloadAttachment(attachment)}
+                        >
+                          Download
+                        </button>
+                        <button
+                          className="secondary-button compact-button"
+                          type="button"
+                          onClick={() => handleDeleteAttachment(attachment)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                  {attachments.length === 0 ? <p className="empty-state">No attachments yet.</p> : null}
+                </div>
+              </div>
+            )}
+
+            {selectedTask && drawerTab === "activity" && (
+              <div style={{ display: "grid", gap: "1rem" }}>
+                <h3>Activity Log</h3>
+                <div className="detail-list">
+                  {activity.map((event) => (
+                    <article className="detail-item" key={event.id}>
+                      <strong>{event.event_type}</strong>
+                      <small>{new Date(event.created_at).toLocaleString()}</small>
+                    </article>
+                  ))}
+                  {activity.length === 0 ? <p className="empty-state">No activity yet.</p> : null}
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Create Task Modal Overlay */}
+        <div className={`modal-overlay ${isTaskModalOpen ? "active" : ""}`} onClick={() => setIsTaskModalOpen(false)}>
+          <div className="modal-container" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create new task</h2>
+              <button className="drawer-close" type="button" onClick={() => setIsTaskModalOpen(false)}>
+                &times;
+              </button>
+            </div>
+            <form className="form-panel" onSubmit={handleCreateTask}>
+              <input name="title" placeholder="Task title" required />
+              <textarea name="description" placeholder="Description" />
+              <select name="project_id" defaultValue="">
+                <option value="" disabled>Select project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              <select
-                name="priority"
-                defaultValue={selectedTask?.priority ?? "Medium"}
-                disabled={!selectedTask}
-              >
+              <select name="priority" defaultValue="Medium">
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
               </select>
-              <select name="assignee_id" defaultValue={selectedTask?.assignee_id ?? ""} disabled={!selectedTask}>
+              <select name="assignee_id" defaultValue="">
                 <option value="">Unassigned</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.user_id}>
-                    {member.name}
-                  </option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.user_id}>{m.name}</option>
                 ))}
               </select>
-              <input name="due_date" defaultValue={selectedTask?.due_date ?? ""} type="date" disabled={!selectedTask} />
-              <button type="submit" disabled={!selectedTask}>
-                Save task
-              </button>
+              <button type="submit">Create task</button>
             </form>
-            <form className="form-panel" onSubmit={handleCreateComment}>
+          </div>
+        </div>
+
+        {/* Create Project Modal Overlay */}
+        <div className={`modal-overlay ${isProjectModalOpen ? "active" : ""}`} onClick={() => setIsProjectModalOpen(false)}>
+          <div className="modal-container" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Create new project</h2>
+              <button className="drawer-close" type="button" onClick={() => setIsProjectModalOpen(false)}>
+                &times;
+              </button>
+            </div>
+            <form className="form-panel" onSubmit={handleCreateProject}>
               <input
-                value={commentBody}
-                onChange={(event) => setCommentBody(event.target.value)}
-                placeholder="Add a comment"
-                disabled={!selectedTask}
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                placeholder="Project name"
+                required
               />
-              <button type="submit" disabled={!selectedTask || !commentBody.trim()}>
-                Comment
-              </button>
+              <button type="submit">Create project</button>
             </form>
-            <div className="detail-list">
-              {comments.map((comment) => (
-                <article className="detail-item" key={comment.id}>
-                  <strong>{comment.body}</strong>
-                  <small>{new Date(comment.created_at).toLocaleString()}</small>
-                </article>
-              ))}
-              {selectedTask && comments.length === 0 ? <p className="empty-state">No comments yet.</p> : null}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Files</p>
-                <h2>Attachments</h2>
-              </div>
-            </div>
-            <form className="form-panel" onSubmit={handleUploadAttachment}>
-              <input type="file" accept={attachmentAccept} onChange={handleFileChange} disabled={!selectedTask || isUploading} />
-              <button type="submit" disabled={!selectedTask || !file || isUploading}>
-                {isUploading ? "Uploading" : "Upload file"}
-              </button>
-              {attachmentMessage ? <p className="form-message">{attachmentMessage}</p> : null}
-            </form>
-            <div className="detail-list">
-              {attachments.map((attachment) => (
-                <article className="detail-item" key={attachment.id}>
-                  <div>
-                    <strong>{attachment.filename}</strong>
-                    <small>{attachment.content_type} - {formatBytes(attachment.byte_size)}</small>
-                  </div>
-                  <div className="button-row">
-                    <button
-                      className="secondary-button compact-button"
-                      type="button"
-                      onClick={() => handleDownloadAttachment(attachment)}
-                    >
-                      Download
-                    </button>
-                    <button
-                      className="secondary-button compact-button"
-                      type="button"
-                      onClick={() => handleDeleteAttachment(attachment)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </article>
-              ))}
-              {selectedTask && attachments.length === 0 ? <p className="empty-state">No attachments yet.</p> : null}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">History</p>
-                <h2>Activity</h2>
-              </div>
-            </div>
-            <div className="detail-list">
-              {activity.map((event) => (
-                <article className="detail-item" key={event.id}>
-                  <strong>{event.event_type}</strong>
-                  <small>{new Date(event.created_at).toLocaleString()}</small>
-                </article>
-              ))}
-              {selectedTask && activity.length === 0 ? <p className="empty-state">No activity yet.</p> : null}
-            </div>
-          </section>
-        </section>
+          </div>
+        </div>
       </section>
     </main>
   );
 }
+

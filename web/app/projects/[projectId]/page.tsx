@@ -313,7 +313,7 @@ export default function ProjectDetailPage() {
                     </div>
                     <span>{members.find((member) => member.user_id === task.assignee_id)?.name ?? "Unassigned"}</span>
                     <span>{task.priority}</span>
-                    <span className="status-pill">{task.status}</span>
+                    <span className="status-pill" data-status={task.status}>{task.status}</span>
                     <span>{task.due_date ?? "No due date"}</span>
                   </article>
                 ))}

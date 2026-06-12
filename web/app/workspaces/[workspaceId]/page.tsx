@@ -283,7 +283,7 @@ export default function WorkspaceDetailPage() {
                       <strong>{member.name}</strong>
                       <small>{member.email}</small>
                     </div>
-                    <span className="status-pill">{member.role}</span>
+                    <span className="status-pill" data-status={member.role}>{member.role}</span>
                   </Link>
                 ))}
                 {members.length === 0 ? <p className="empty-state">No members loaded.</p> : null}
