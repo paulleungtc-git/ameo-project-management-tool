@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   apiRequest,
+  isAuthError,
   statusOrder,
   themeKey,
   tokenKey,
@@ -105,15 +106,18 @@ export default function WorkspaceDetailPage() {
         if (cancelled) {
           return;
         }
-        window.localStorage.removeItem(tokenKey);
-        notifyAuthChanged();
-        setToken(null);
-        setUser(null);
-        setWorkspaces([]);
-        setProjects([]);
-        setTasks([]);
-        setMembers([]);
         setIsLoading(false);
+        if (isAuthError(error)) {
+          window.localStorage.removeItem(tokenKey);
+          notifyAuthChanged();
+          setToken(null);
+          setUser(null);
+          setWorkspaces([]);
+          setProjects([]);
+          setTasks([]);
+          setMembers([]);
+          return;
+        }
         setMessage(error instanceof Error ? error.message : "Could not load workspace.");
       });
 

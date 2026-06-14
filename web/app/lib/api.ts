@@ -88,6 +88,23 @@ export const tokenKey = "ameo_token";
 export const themeKey = "ameo_theme";
 export const statusOrder: TaskStatus[] = ["Backlog", "Todo", "In Progress", "Review", "Done"];
 
+// Carries the HTTP status so callers can tell a real auth failure (401/403)
+// apart from a transient network error or backend restart (no status / 5xx).
+// Only the former should end a session.
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export function isAuthError(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
 export async function apiRequest<T>(
   path: string,
   token: string | null,
@@ -110,7 +127,7 @@ export async function apiRequest<T>(
     } catch {
       detail = "";
     }
-    throw new Error(detail || text || `Request failed: ${response.status}`);
+    throw new ApiError(response.status, detail || text || `Request failed: ${response.status}`);
   }
   if (!text) {
     return undefined as T;
@@ -126,7 +143,7 @@ export async function apiBlob(path: string, token: string | null): Promise<Blob>
   const response = await fetch(`${apiBase}${path}`, { headers });
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    throw new ApiError(response.status, message || `Request failed: ${response.status}`);
   }
   return response.blob();
 }

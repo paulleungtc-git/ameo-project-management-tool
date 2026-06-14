@@ -5,6 +5,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import {
   apiBlob,
   apiRequest,
+  isAuthError,
   statusOrder,
   themeKey,
   tokenKey,
@@ -178,12 +179,20 @@ export default function Home() {
           return loadWorkspaceData(token);
         }
       })
-      .catch(() => {
-        if (!cancelled) {
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        if (isAuthError(error)) {
           window.localStorage.removeItem(tokenKey);
           setToken(null);
           notifyAuthChanged();
+          return;
         }
+        // Transient error (network blip, backend restarting): keep the
+        // session and let the user retry instead of logging them out.
+        setUser(null);
+        setMessage("Couldn't reach the server. It may be restarting - refresh in a moment.");
       });
 
     return () => {

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   apiRequest,
+  isAuthError,
   themeKey,
   tokenKey,
   type Task,
@@ -136,14 +137,17 @@ export default function MemberDetailPage() {
         if (cancelled) {
           return;
         }
-        window.localStorage.removeItem(tokenKey);
-        notifyAuthChanged();
-        setToken(null);
-        setUser(null);
-        setWorkspaces([]);
-        setMembers([]);
-        setTasks([]);
         setIsLoading(false);
+        if (isAuthError(error)) {
+          window.localStorage.removeItem(tokenKey);
+          notifyAuthChanged();
+          setToken(null);
+          setUser(null);
+          setWorkspaces([]);
+          setMembers([]);
+          setTasks([]);
+          return;
+        }
         setMessage(error instanceof Error ? error.message : "Could not load member.");
       });
 

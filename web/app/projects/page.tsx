@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { apiRequest, themeKey, tokenKey, type Project, type Task, type User, type Workspace } from "../lib/api";
+import { apiRequest, isAuthError, themeKey, tokenKey, type Project, type Task, type User, type Workspace } from "../lib/api";
 import { notifyAuthChanged } from "../lib/auth";
 import { Sidebar } from "../components/sidebar";
 
@@ -142,14 +142,17 @@ export default function ProjectsPage() {
         if (cancelled) {
           return;
         }
-        window.localStorage.removeItem(tokenKey);
-        notifyAuthChanged();
-        setToken(null);
-        setUser(null);
-        setWorkspaces([]);
-        setProjects([]);
-        setTasks([]);
         setIsLoading(false);
+        if (isAuthError(error)) {
+          window.localStorage.removeItem(tokenKey);
+          notifyAuthChanged();
+          setToken(null);
+          setUser(null);
+          setWorkspaces([]);
+          setProjects([]);
+          setTasks([]);
+          return;
+        }
         setMessage(error instanceof Error ? error.message : "Could not load projects.");
       });
 
