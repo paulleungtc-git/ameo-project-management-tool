@@ -14,6 +14,8 @@ type SidebarProps = {
   userName?: string | null;
 };
 
+const buildInfo = process.env.NEXT_PUBLIC_BUILD_INFO ?? "dev";
+
 export function Sidebar({ active, workspace, userName }: SidebarProps) {
   return (
     <aside className="sidebar" aria-label="Workspace navigation">
@@ -56,6 +58,9 @@ export function Sidebar({ active, workspace, userName }: SidebarProps) {
           <p>Fetching your workspace</p>
         </div>
       )}
+      <p className="build-info" title="Last deployed commit">
+        {buildInfo}
+      </p>
     </aside>
   );
 }

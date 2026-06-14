@@ -1272,3 +1272,11 @@ h3 {
   margin: 0;
 }
 
+
+.build-info {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.01em;
+}
